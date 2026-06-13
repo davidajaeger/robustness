@@ -2,7 +2,7 @@ Package: robustness
 Type: Package
 Title: Range Tests for Equality and Equivalence Across Specifications
 Version: 0.1.0
-Authors@R: person("David A.", "Jaeger", email = "first.last@example.com",
+Authors@R: person("David A.", "Jaeger", email = "david.jaeger@st-andrews.ac.uk",
                   role = c("aut", "cre"))
 Description: Computes range-based and Wald-based tests of equality and
     equivalence across a set of model specifications, from saved bootstrap
