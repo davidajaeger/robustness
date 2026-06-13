@@ -1,0 +1,13 @@
+citHeader("To cite the robustness method in publications, please cite the paper. The software package implements the method described there.")
+
+bibentry(
+  bibtype = "Article",
+  title   = "Robustness? Range Tests for Equality and Equivalence Across Specifications",
+  author  = person("David A.", "Jaeger"),
+  journal = "Working paper",
+  year    = "2026",
+  textVersion = paste0(
+    "Jaeger, David A. (2026). Robustness? Range Tests for Equality and ",
+    "Equivalence Across Specifications."
+  )
+)

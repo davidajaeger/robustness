@@ -1,0 +1,141 @@
+---
+title: "Range tests for equality and equivalence across specifications"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Range tests for equality and equivalence across specifications}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(robustness)
+```
+
+## The method
+
+When an empirical finding is reported across many specifications, readers want
+to know whether the estimates agree. Two questions are distinct. *Equality*
+asks whether the specifications could share a common value. *Equivalence* asks
+whether they are close enough that any differences are immaterial. Jaeger
+(2026) builds both tests on the range of the estimates,
+$R(\hat{\boldsymbol\theta}) = \max_k \hat\theta_k - \min_k \hat\theta_k$, and on
+a companion Wald statistic, using the bootstrap to obtain their distributions.
+
+This package computes those statistics. It takes the full-sample estimates and
+a matrix of bootstrap draws and returns, for each comparison, the range and
+Wald statistics, equivalence bounds $\delta^*(\alpha)$, and equality-test
+p-values. It is the R counterpart of the Stata `robustness` command; given the
+same draws, the two produce the same numbers.
+
+The package computes statistics from draws. It does not generate the draws. The
+section below shows how.
+
+## A first example
+
+The bundled `lee_example` is a small illustration shaped like the Lee (2008)
+incumbency application: seven specifications of an effect near 0.077.
+
+```{r}
+str(lee_example, max.level = 1)
+
+robustness(lee_example$theta, lee_example$draws,
+           comparisons = lee_example$comparisons)
+```
+
+Comparisons are given as a named list of column indices, defined directly in R.
+This keeps them transparent and self-documenting: each comparison is the set of
+specifications it pools.
+
+The result has a tidy form for assembling tables:
+
+```{r}
+res <- robustness(lee_example$theta, lee_example$draws,
+                  comparisons = lee_example$comparisons)
+as.data.frame(res)
+```
+
+## Generating the draws
+
+The statistics need uncentred bootstrap draws of the coefficient, one column
+per specification. The essential discipline is the **shared resample**: on each
+bootstrap replication, draw the resample *once* and estimate every
+specification on that same resample. Resampling separately for each
+specification destroys the joint distribution and silently gives wrong
+p-values and bounds.
+
+Here is a minimal generation example in R, in the spirit of the Lee
+application: a clustered bootstrap over a single resample per replication.
+
+```{r, eval = FALSE}
+# `dat` has outcome y, running variable x, cluster id, and a treatment d.
+# Seven specifications differ in controls; all share the resample.
+
+specs <- list(
+  no_controls  = y ~ d,
+  prev_vote    = y ~ d + lag_vote,
+  office_exp   = y ~ d + office,
+  elect_exp    = y ~ d + elect,
+  all_controls = y ~ d + lag_vote + office + elect,
+  resid_out    = yresid ~ d,
+  first_diff   = dy ~ d
+)
+theta <- sapply(specs, function(f) coef(lm(f, data = dat))[["d"]])
+
+clusters <- unique(dat$cluster)
+B <- 9999
+draws <- matrix(NA_real_, B, length(specs))
+set.seed(42)
+for (b in seq_len(B)) {
+  # ONE resample of clusters, reused for every specification
+  pick <- sample(clusters, length(clusters), replace = TRUE)
+  bdat <- do.call(rbind, lapply(pick, function(cl) dat[dat$cluster == cl, ]))
+  draws[b, ] <- sapply(specs, function(f) coef(lm(f, data = bdat))[["d"]])
+}
+
+robustness(theta, draws, comparisons = list(all = 1:7, main = 1:5))
+```
+
+The single `sample()` call per replication, reused across all specifications,
+is the shared resample. That one line is what makes the joint distribution
+correct.
+
+## Using draws generated in Stata
+
+The Stata `robustness` package saves draws as `.dta` files. To analyse them in
+R, read them with `haven` and pass the pieces to `robustness()`. The conversion
+is a few lines and lives in your own script, not in this package.
+
+```{r, eval = FALSE}
+library(haven)
+
+meta  <- read_dta("output/draws/lee_draws_meta.dta")
+draws <- read_dta("output/draws/lee_draws.dta")
+
+theta <- meta$theta
+D     <- as.matrix(draws[, grep("^coef[0-9]+$", names(draws))])
+
+robustness(theta, D,
+           comparisons = list(all = 1:7, main = 1:5,
+                              main_resid = 1:6,
+                              main_firstdiff = c(1, 2, 3, 4, 5, 7)))
+```
+
+Because R and Stata use different random number generators, draws generated
+separately in the two languages are not identical. At a realistic number of
+replications the resulting statistics agree up to Monte Carlo error: the test
+is designed not to depend on the particular draws. Reading the *same* saved
+Stata draws into R, as above, reproduces the Stata statistics exactly.
+
+## Citing
+
+To cite the method, cite the paper:
+
+```{r, eval = FALSE}
+citation("robustness")
+```
+
+## Reference
+
+Jaeger, David A. (2026). Robustness? Range Tests for Equality and Equivalence
+Across Specifications.

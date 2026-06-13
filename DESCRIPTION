@@ -1,0 +1,27 @@
+Package: robustness
+Type: Package
+Title: Range Tests for Equality and Equivalence Across Specifications
+Version: 0.1.0
+Authors@R: person("David A.", "Jaeger", email = "first.last@example.com",
+                  role = c("aut", "cre"))
+Description: Computes range-based and Wald-based tests of equality and
+    equivalence across a set of model specifications, from saved bootstrap
+    draws of a coefficient of interest. Given the full-sample estimates and a
+    matrix of uncentred bootstrap draws, the package reports the observed
+    range and Wald statistics, equivalence bounds at chosen significance
+    levels, and bootstrap p-values for the equality tests. It implements the
+    method of Jaeger (2026) and is the R counterpart of the Stata 'robustness'
+    command; given the same draws the two produce the same statistics. The
+    package computes statistics from draws and does not generate the draws.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Depends: R (>= 3.5.0)
+Imports: stats
+Suggests:
+    haven,
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0)
+VignetteBuilder: knitr
+RoxygenNote: 7.3.1
+Config/testthat/edition: 3
