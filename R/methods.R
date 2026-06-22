@@ -10,9 +10,9 @@ print.range_test <- function(x, ...) {
   cat(sprintf("                W = %9.4f   p_W = %7.4f\n", x$W, x$p_W))
   cat("  Equivalence\n")
   for (i in seq_len(nrow(x$equivalence))) {
-    cat(sprintf("    alpha=%.2f   delta*_R = %9.4f   delta*_W = %9.4f\n",
-                x$equivalence$alpha[i], x$equivalence$delta_R[i],
-                x$equivalence$delta_W[i]))
+    cat(sprintf("    alpha=%.2f   R* = %9.4f   W* = %9.4f\n",
+                x$equivalence$alpha[i], x$equivalence$Rstar[i],
+                x$equivalence$Wstar[i]))
   }
   if (!is.null(x$avg_n)) {
     nmin <- min(x$avg_n); nmax <- max(x$avg_n)
@@ -68,8 +68,8 @@ as.data.frame.robustness <- function(x, row.names = NULL, optional = FALSE,
       p_R        = r$p_R,
       p_W        = r$p_W,
       alpha      = r$equivalence$alpha,
-      delta_R    = r$equivalence$delta_R,
-      delta_W    = r$equivalence$delta_W,
+      Rstar      = r$equivalence$Rstar,
+      Wstar      = r$equivalence$Wstar,
       stringsAsFactors = FALSE
     )
   })
@@ -87,6 +87,31 @@ summary.robustness <- function(object, ...) {
   df <- as.data.frame(object)
   print(df, row.names = FALSE)
   invisible(df)
+}
+
+#' Extract the per-replication bootstrap statistics
+#'
+#' Returns the bootstrap series that the reported summaries collapse to
+#' scalars: for each comparison, the uncentred range and Wald (whose
+#' \code{1 - alpha} quantiles are \code{R*} and \code{W*}) and the recentred
+#' range and Wald (whose tails at or above the observed statistic give
+#' \code{p_R} and \code{p_W}). Long form, one row per comparison-by-draw,
+#' matching the layout the Stata command's \code{saving()} option writes.
+#' Requires the object to have been produced with \code{keep_draws = TRUE}.
+#'
+#' @param x A \code{"robustness"} object created with \code{keep_draws = TRUE}.
+#' @return A data frame with columns \code{comparison}, \code{draw},
+#'   \code{range_unc}, \code{range_rc}, \code{wald_unc}, \code{wald_rc}.
+#' @export
+bootstrap_draws <- function(x) {
+  if (!inherits(x, "robustness"))
+    stop("x must be a 'robustness' object.")
+  have <- vapply(x$results, function(r) !is.null(r$draws), logical(1))
+  if (!all(have))
+    stop("No stored bootstrap draws. Re-run robustness(..., keep_draws = TRUE).")
+  rows <- lapply(x$results, function(r)
+    data.frame(comparison = r$label, r$draws, stringsAsFactors = FALSE))
+  do.call(rbind, c(rows, list(make.row.names = FALSE)))
 }
 
 # Null-coalescing helper.

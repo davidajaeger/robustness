@@ -9,24 +9,31 @@
 #'
 #' @details
 #' For \eqn{K} specifications with full-sample estimates and \eqn{B} bootstrap
-#' draws of each, \code{robustness()} computes, for every requested comparison:
-#' the observed range and Wald statistic; equivalence bounds
-#' \eqn{\delta^*_R(\alpha)} and \eqn{\delta^*_W(\alpha)} from the uncentred
-#' bootstrap distribution (\eqn{\delta^*_R(\alpha)} is the observed range plus
-#' the \eqn{(1-\alpha)} quantile of the centred bootstrap range, and
-#' \eqn{\delta^*_R(.50)} its median); and equality-test p-values \eqn{p_R} and
-#' \eqn{p_W} from the recentred bootstrap distribution.
+#' draws of each, \code{robustness()} computes, for every requested comparison,
+#' two readings of the \emph{same} bootstrap draws.
 #'
-#' The bootstrap draws must be uncentred (raw resample estimates). All
-#' recentring is internal. Replications with any missing draw among the
-#' selected specifications are dropped and counted; the function stops if more
-#' than \code{max_drop} are incomplete.
+#' \emph{Equivalence.} The minimum equivalence bound
+#' \eqn{R^*_{1-\alpha}} is the \eqn{(1-\alpha)} quantile of the
+#' \emph{uncentred} bootstrap range, taken as the inverse of the empirical
+#' c.d.f.: the smallest \eqn{d} such that at least a \eqn{(1-\alpha)} share of
+#' bootstrap ranges are \eqn{\leq d}. This is the type-1 sample quantile and
+#' is exactly the definition in the paper. \eqn{W^*_{1-\alpha}} is the
+#' analogous bound on the Wald (Mahalanobis) scale, the square root of the
+#' \eqn{(1-\alpha)} quantile of the uncentred bootstrap Wald statistic.
+#'
+#' \emph{Equality.} The p-values \eqn{p_R} and \eqn{p_W} are the shares of the
+#' \emph{recentred} bootstrap statistics at or above the observed statistic.
+#' Recentring subtracts each estimate's deviation from the cross-specification
+#' mean, imposing a common probability limit (\eqn{\Delta = 0}).
+#'
+#' The two readings come from the same resamples and differ only in the
+#' recentring. The bootstrap draws must be uncentred (raw resample estimates);
+#' all recentring is internal.
 #'
 #' \code{robustness()} consumes bootstrap draws; it does not generate them. The
 #' same shared resample must be used for all specifications on each
 #' replication. Drawing specifications independently silently destroys the
-#' joint distribution and gives wrong p-values and bounds. See the vignette for
-#' a worked generation example.
+#' joint distribution and gives wrong p-values and bounds.
 #'
 #' @param theta Numeric vector of \eqn{K} full-sample point estimates.
 #' @param draws Numeric matrix of uncentred bootstrap draws, \eqn{B} rows by
@@ -35,34 +42,47 @@
 #'   comparison), or a named list of integer vectors (several comparisons, the
 #'   names labelling them). Defaults to all specifications as one comparison
 #'   named \code{"all"}.
-#' @param alpha Numeric vector of significance levels for equivalence bounds.
-#'   Defaults to \code{c(0.50, 0.05)}.
+#' @param alpha Numeric vector of significance levels for the equivalence
+#'   bounds. Defaults to \code{c(0.50, 0.05)}, giving \eqn{R^*_{.50}} (the
+#'   median of the bootstrap range) and \eqn{R^*_{.95}} (the bound).
 #' @param n Optional per-specification sample sizes: a \eqn{B} by \eqn{K}
 #'   matrix or a length-\eqn{K} vector. Reported descriptively; does not enter
 #'   any statistic.
 #' @param max_drop Maximum proportion of incomplete bootstrap replications
 #'   tolerated before the function stops. Defaults to 0.01.
+#' @param keep_draws Logical. If \code{TRUE}, the per-replication bootstrap
+#'   series (the uncentred and recentred range and Wald) are retained on each
+#'   comparison's result and can be extracted with \code{\link{bootstrap_draws}}
+#'   for plotting. Defaults to \code{FALSE}, since these are \eqn{B}-length
+#'   vectors per comparison.
 #'
 #' @return An object of class \code{"robustness"}: a list of per-comparison
 #'   results (each of class \code{"range_test"}), with \code{print},
-#'   \code{summary}, and \code{as.data.frame} methods.
+#'   \code{summary}, and \code{as.data.frame} methods. With
+#'   \code{keep_draws = TRUE}, \code{\link{bootstrap_draws}} returns the
+#'   per-replication series in long form.
 #'
 #' @references
 #' Jaeger, David A. (2026). Robustness? Range Tests for Equality and
-#' Equivalence Across Specifications. To cite this method, please cite that
-#' paper; see \code{citation("robustness")}.
+#' Equivalence Across Specifications.
 #'
 #' @examples
 #' set.seed(1)
 #' theta <- c(0.20, 0.22, 0.19, 0.21)
-#' draws <- sapply(theta, function(m) rnorm(999, m, 0.03))
+#' draws <- sapply(theta, function(m) rnorm(9999, m, 0.03))
 #' robustness(theta, draws)
 #' robustness(theta, draws,
 #'            comparisons = list(all = 1:4, first_two = 1:2, extremes = c(1, 4)))
 #'
+#' # Retain the bootstrap series and plot the range distribution:
+#' r <- robustness(theta, draws, keep_draws = TRUE)
+#' d <- bootstrap_draws(r)
+#' hist(d$range_unc[d$comparison == "all"])
+#'
 #' @export
 robustness <- function(theta, draws, comparisons = NULL,
-                       alpha = c(0.50, 0.05), n = NULL, max_drop = 0.01) {
+                       alpha = c(0.50, 0.05), n = NULL, max_drop = 0.01,
+                       keep_draws = FALSE) {
 
   theta <- as.numeric(theta)
   draws <- as.matrix(draws)
@@ -86,7 +106,8 @@ robustness <- function(theta, draws, comparisons = NULL,
 
   results <- lapply(names(comparisons), function(cn) {
     .range_test_one(theta, draws, cols = comparisons[[cn]],
-                    alpha = alpha, n = n, max_drop = max_drop, label = cn)
+                    alpha = alpha, n = n, max_drop = max_drop, label = cn,
+                    keep_draws = keep_draws)
   })
   names(results) <- names(comparisons)
 
@@ -97,87 +118,116 @@ robustness <- function(theta, draws, comparisons = NULL,
 }
 
 
-# Internal: statistics for one comparison. The verified computational core.
+# Internal: statistics for one comparison. The computational core.
+#
+# Inputs:  theta  full-sample estimates (length >= K)
+#          draws  uncentred bootstrap draws, B x (>= K)
+#          cols   the specifications in this comparison (column indices)
+#
+# Output (class "range_test"):
+#          R, W       observed range and Wald statistic, from the estimates
+#          p_R, p_W   equality p-values, from the recentred bootstrap
+#          equivalence  data frame: alpha, Rstar, Wstar (one row per alpha)
+#
+# The same uncentred draws are read two ways. Uncentred -> equivalence bounds
+# (Rstar, Wstar); recentred -> equality p-values (p_R, p_W). Nothing else
+# differs between the two.
 .range_test_one <- function(theta, draws, cols = NULL, alpha = c(0.50, 0.05),
-                            n = NULL, max_drop = 0.01, label = NULL) {
+                            n = NULL, max_drop = 0.01, label = NULL,
+                            keep_draws = FALSE) {
 
   if (is.null(cols)) cols <- seq_along(theta)
   cols <- as.integer(cols)
-  if (any(cols < 1L | cols > length(theta))) {
+  if (anyDuplicated(cols))                         # a spec may appear only once
+    stop("Comparison '", label, "' lists a specification more than once.")
+  if (any(cols < 1L | cols > length(theta)))
     stop("Comparison '", label, "' references columns out of range ",
          "(valid 1 to ", length(theta), ").")
-  }
 
   th <- theta[cols]
   D  <- draws[, cols, drop = FALSE]
   K  <- length(cols)
-  if (K < 2L) {
+  if (K < 2L)
     stop("Comparison '", label, "' needs at least 2 specifications, got ", K, ".")
-  }
 
+  # Drop replications with any missing draw among these specs; count them and
+  # stop if the incomplete share exceeds max_drop.
   B_orig    <- nrow(D)
   ok        <- stats::complete.cases(D)
   D         <- D[ok, , drop = FALSE]
   B         <- nrow(D)
   B_dropped <- B_orig - B
-  if (B < K) {
+  if (B < K)
     stop(sprintf("Comparison '%s': only %d complete replications (of %d), need %d.",
                  label, B, B_orig, K))
-  }
-  if (B_dropped / B_orig > max_drop) {
+  if (B_dropped / B_orig > max_drop)
     stop(sprintf(paste0("Comparison '%s': %d of %d replications incomplete ",
                         "(%.1f%%), exceeding max_drop = %.1f%%."),
-                 label, B_dropped, B_orig,
-                 100 * B_dropped / B_orig, 100 * max_drop))
-  }
+                 label, B_dropped, B_orig, 100 * B_dropped / B_orig, 100 * max_drop))
 
-  Rmat <- matrix(-1 / K, nrow = K - 1L, ncol = K)
-  for (i in seq_len(K - 1L)) Rmat[i, i] <- Rmat[i, i] + 1
+  # Grand-mean contrast, (K-1) x K: row i is e_i minus the mean over all K
+  # coordinates. The K estimates are equal iff all K-1 contrasts are zero.
+  Rmat   <- diag(K)[-K, , drop = FALSE] - 1 / K
+  # Bootstrap covariance of the K estimates: captures the cross-specification
+  # dependence the shared resample induces. RVRinv weights the Wald.
+  RVRinv <- solve(Rmat %*% stats::var(D) %*% t(Rmat))
 
-  Vhat   <- stats::var(D)
-  RVR    <- Rmat %*% Vhat %*% t(Rmat)
-  RVRinv <- solve(RVR)
-
+  # Observed statistics, from the full-sample estimates.
+  R_obs <- max(th) - min(th)
   d_obs <- Rmat %*% th
   W_obs <- as.numeric(t(d_obs) %*% RVRinv %*% d_obs)
-  R_obs <- max(th) - min(th)
 
-  Db    <- Rmat %*% t(D)
-  W_unc <- colSums(Db * (RVRinv %*% Db))
+  # Uncentred bootstrap range and Wald, one value per replication. These are
+  # the distributions whose (1-alpha) quantiles are the equivalence bounds.
   R_unc <- apply(D, 1L, function(r) max(r) - min(r))
+  Bd    <- Rmat %*% t(D)
+  W_unc <- colSums(Bd * (RVRinv %*% Bd))
 
-  thbar <- mean(th)
-  Dc    <- sweep(D, 2L, th, "-") + thbar
-  Dbc   <- Rmat %*% t(Dc)
-  W_rc  <- colSums(Dbc * (RVRinv %*% Dbc))
+  # Recentred draws: subtract each spec's deviation from the cross-spec mean,
+  # theta_hat_k - mean(theta_hat), which imposes Delta = 0. (Equivalently,
+  # centre every spec at the common mean.) The common shift cancels in the
+  # range and in the contrast, so it never affects p_R or p_W; it is written
+  # this way to match the paper's definition exactly.
+  Dc    <- sweep(D, 2L, th - mean(th), "-")
   R_rc  <- apply(Dc, 1L, function(r) max(r) - min(r))
+  Bdc   <- Rmat %*% t(Dc)
+  W_rc  <- colSums(Bdc * (RVRinv %*% Bdc))
 
-  p_W <- mean(W_rc >= W_obs)
-  p_R <- mean(R_rc >= R_obs)
+  # Equality p-values, Monte Carlo form (1 + #)/(B + 1): the observed statistic
+  # joins its own reference set, so the p-value is bounded away from zero
+  # (minimum 1/(B+1)) and is uniform under the null by exchangeability (Davison
+  # and Hinkley 1997). B is the number of complete replications.
+  p_R <- (1 + sum(R_rc >= R_obs)) / (B + 1)
+  p_W <- (1 + sum(W_rc >= W_obs)) / (B + 1)
 
-  eq <- data.frame(alpha = alpha, delta_R = NA_real_, delta_W = NA_real_)
+  # Equivalence bounds: (1-alpha) quantile of the UNCENTRED distribution,
+  # type 1 (inverse empirical c.d.f.). W_unc >= 0 always, so its quantile is
+  # non-negative and the square root is real.
+  eq <- data.frame(alpha = alpha, Rstar = NA_real_, Wstar = NA_real_)
   for (a in seq_along(alpha)) {
-    q_R <- stats::quantile(R_unc - R_obs, probs = 1 - alpha[a],
-                           names = FALSE, type = 7)
-    q_W <- stats::quantile(W_unc - W_obs, probs = 1 - alpha[a],
-                           names = FALSE, type = 7)
-    eq$delta_R[a] <- R_obs + q_R
-    eq$delta_W[a] <- sqrt(max(W_obs + q_W, 0))
+    eq$Rstar[a] <-      stats::quantile(R_unc, 1 - alpha[a], type = 1, names = FALSE)
+    eq$Wstar[a] <- sqrt(stats::quantile(W_unc, 1 - alpha[a], type = 1, names = FALSE))
   }
 
   avg_n <- NULL
   if (!is.null(n)) {
-    if (is.matrix(n)) {
-      nc    <- n[ok, cols, drop = FALSE]
-      avg_n <- colMeans(nc, na.rm = TRUE)
-    } else {
-      avg_n <- as.numeric(n)[cols]
-    }
+    if (is.matrix(n)) avg_n <- colMeans(n[ok, cols, drop = FALSE], na.rm = TRUE)
+    else              avg_n <- as.numeric(n)[cols]
   }
 
   out <- list(label = label, K = K, B = B, B_dropped = B_dropped,
               R = R_obs, W = W_obs, p_R = p_R, p_W = p_W,
               equivalence = eq, avg_n = avg_n)
+
+  # The four bootstrap series, retained only on request (each is B-length).
+  # These are the distributions the summaries above collapse: the (1-alpha)
+  # quantile of range_unc is Rstar, the share of range_rc at or above R_obs is
+  # p_R. Column names match the Stata command's saving() output.
+  if (keep_draws) {
+    out$draws <- data.frame(draw = seq_len(B),
+                            range_unc = R_unc, range_rc = R_rc,
+                            wald_unc = W_unc, wald_rc = W_rc)
+  }
   class(out) <- "range_test"
   out
 }
