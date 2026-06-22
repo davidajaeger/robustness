@@ -6,7 +6,7 @@ Range tests for equality and equivalence across specifications, from saved boots
 
 Applied work routinely presents several specifications of the same coefficient and declares the results "robust" when the estimates look similar. The range of the estimates is the implicit object of that claim, but its joint sampling distribution is rarely reported. This package computes two statistics from bootstrap draws of the coefficient:
 
-- **`R*` (the minimum equivalence bound):** the smallest tolerance within which the specifications can be certified equivalent at a chosen level. Reported in the units of the coefficient.
+- **`R*` (the minimum equivalence bound):** the smallest tolerance within which the specifications can be certified equivalent at a chosen level, in the units of the coefficient. It is the `(1 - alpha)` quantile of the uncentred bootstrap range, which is the paper's definition.
 - **`p_R` (the range-based equality test):** the bootstrap p-value for the null that every specification shares a common probability limit.
 
 The two answer different questions. A large `p_R` means the estimates cannot be told apart; a small `R*` means they are affirmatively close. Imprecise estimates do not earn robustness by default.
@@ -51,7 +51,8 @@ robustness(theta, draws,
 
 ```r
 robustness(theta, draws, comparisons = NULL,
-           alpha = c(0.50, 0.05), n = NULL, max_drop = 0.01)
+           alpha = c(0.50, 0.05), n = NULL, max_drop = 0.01,
+           keep_draws = FALSE)
 ```
 
 - **`theta`** — numeric vector of `K` full-sample point estimates.
@@ -60,8 +61,32 @@ robustness(theta, draws, comparisons = NULL,
 - **`alpha`** — significance levels for the equivalence bounds. Defaults to `c(0.50, 0.05)`: the median bound (a point estimate of the range) and the 95th-percentile upper bound.
 - **`n`** — optional per-specification sample sizes, reported descriptively.
 - **`max_drop`** — maximum proportion of incomplete replications tolerated before the function stops. Defaults to `0.01`.
+- **`keep_draws`** — if `TRUE`, the per-replication bootstrap series are retained on each comparison's result and can be extracted with `bootstrap_draws()` for plotting. Defaults to `FALSE`, since these are `B`-length vectors per comparison.
 
-Returns an object of class `robustness` with `print`, `summary`, and `as.data.frame` methods, so results drop straight into a data frame for tables.
+Returns an object of class `robustness` with `print`, `summary`, and `as.data.frame` methods, so results drop straight into a data frame for tables (one row per comparison-by-alpha, with columns including `R`, `W`, `p_R`, `p_W`, `Rstar`, `Wstar`). With `keep_draws = TRUE`, `bootstrap_draws()` returns the per-replication series in long form.
+
+## Plotting the bootstrap distribution
+
+The range distribution is the object the "robustness" claim implicitly invokes and rarely shows. With `keep_draws = TRUE` you can plot it:
+
+```r
+r <- robustness(theta, draws, keep_draws = TRUE)
+
+# per-replication series, long: comparison, draw, range_unc, range_rc, wald_unc, wald_rc
+d <- bootstrap_draws(r)
+
+# range distribution for one comparison, with the equivalence bound marked.
+# Read R* from the result rather than recomputing it: R* is a type-1 order
+# statistic, so quantile() with its default (type 7) would interpolate and the
+# line would sit a hair off. (If you do recompute, pass type = 1.)
+tab   <- as.data.frame(r)
+bound <- tab$Rstar[tab$comparison == "all" & tab$alpha == 0.05]   # R*(.95)
+hist(d$range_unc[d$comparison == "all"], breaks = 40,
+     main = "Bootstrap range distribution")
+abline(v = bound, lty = 2)
+```
+
+The uncentred series (`range_unc`, `wald_unc`) are the ones whose `(1 - alpha)` quantiles are `R*` and `W*`; the recentred series (`range_rc`, `wald_rc`) are the ones whose tails at or above the observed statistic give `p_R` and `p_W`. This matches the layout the Stata command's `saving()` option writes, so either package gives the same series.
 
 ## Generating the draws
 
