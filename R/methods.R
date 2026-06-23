@@ -14,6 +14,10 @@ print.range_test <- function(x, ...) {
                 x$equivalence$alpha[i], x$equivalence$Rstar[i],
                 x$equivalence$Wstar[i]))
   }
+  if (isFALSE(x$wald_ok)) {
+    cat("  Wald undefined: contrast covariance rank deficient.\n")
+    cat("  Range statistics above are valid.\n")
+  }
   if (!is.null(x$avg_n)) {
     nmin <- min(x$avg_n); nmax <- max(x$avg_n)
     if (isTRUE(all.equal(nmin, nmax))) {
@@ -36,7 +40,7 @@ print.robustness <- function(x, ...) {
   cat(strrep("=", 66), "\n", sep = "")
   cat("  Robustness: range tests for equality and equivalence\n")
   cat("  across specifications (Jaeger 2026)\n")
-  cat(sprintf("  B = %d   comparisons = %d   alpha = %s\n",
+  cat(sprintf("  B = %d (supplied)   comparisons = %d   alpha = %s\n",
               x$B, length(x$results),
               paste(formatC(x$alpha, format = "g"), collapse = ", ")))
   cat(strrep("=", 66), "\n", sep = "")
@@ -48,8 +52,9 @@ print.robustness <- function(x, ...) {
 #' Coerce a robustness result to a data frame
 #'
 #' One row per comparison-by-alpha, with the range and Wald statistics,
-#' equality p-values, and equivalence bounds. Convenient for assembling
-#' tables.
+#' equality p-values, equivalence bounds, and the \code{wald_ok} flag (FALSE
+#' when the Wald is undefined through rank deficiency). Convenient for
+#' assembling tables.
 #'
 #' @param x A \code{"robustness"} object.
 #' @param row.names,optional Ignored, present for S3 consistency.
@@ -67,6 +72,7 @@ as.data.frame.robustness <- function(x, row.names = NULL, optional = FALSE,
       W          = r$W,
       p_R        = r$p_R,
       p_W        = r$p_W,
+      wald_ok    = r$wald_ok,
       alpha      = r$equivalence$alpha,
       Rstar      = r$equivalence$Rstar,
       Wstar      = r$equivalence$Wstar,

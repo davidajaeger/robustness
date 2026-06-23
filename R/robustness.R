@@ -58,7 +58,11 @@
 #'
 #' @return An object of class \code{"robustness"}: a list of per-comparison
 #'   results (each of class \code{"range_test"}), with \code{print},
-#'   \code{summary}, and \code{as.data.frame} methods. With
+#'   \code{summary}, and \code{as.data.frame} methods. Each result carries a
+#'   logical \code{wald_ok}; when the contrast covariance is rank deficient
+#'   (collinear specifications) it is \code{FALSE} and the Wald statistics
+#'   \code{W}, \code{p_W}, and \code{Wstar} are \code{NA}, while the range
+#'   statistics \code{R}, \code{p_R}, and \code{Rstar} are unaffected. With
 #'   \code{keep_draws = TRUE}, \code{\link{bootstrap_draws}} returns the
 #'   per-replication series in long form.
 #'
@@ -86,9 +90,23 @@ robustness <- function(theta, draws, comparisons = NULL,
 
   theta <- as.numeric(theta)
   draws <- as.matrix(draws)
+  if (!is.numeric(draws)) {
+    stop("draws must be numeric.")
+  }
   if (ncol(draws) != length(theta)) {
     stop("draws must have one column per element of theta (",
          ncol(draws), " columns vs ", length(theta), " estimates).")
+  }
+  if (!all(is.finite(theta))) {
+    stop("theta must be finite (no NA, NaN, or Inf).")
+  }
+  alpha <- as.numeric(alpha)
+  if (length(alpha) == 0L || any(!is.finite(alpha)) ||
+      any(alpha <= 0 | alpha >= 1)) {
+    stop("alpha must be strictly between 0 and 1.")
+  }
+  if (!is.finite(max_drop) || max_drop < 0 || max_drop >= 1) {
+    stop("max_drop must be in [0, 1).")
   }
 
   if (is.null(comparisons)) {
@@ -232,7 +250,7 @@ robustness <- function(theta, draws, comparisons = NULL,
   }
 
   out <- list(label = label, K = K, B = B, B_dropped = B_dropped,
-              R = R_obs, W = W_obs, p_R = p_R, p_W = p_W,
+              R = R_obs, W = W_obs, p_R = p_R, p_W = p_W, wald_ok = wald_ok,
               equivalence = eq, avg_n = avg_n)
 
   # The four bootstrap series, retained only on request (each is B-length).
