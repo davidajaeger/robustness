@@ -167,46 +167,62 @@ robustness <- function(theta, draws, comparisons = NULL,
 
   # Grand-mean contrast, (K-1) x K: row i is e_i minus the mean over all K
   # coordinates. The K estimates are equal iff all K-1 contrasts are zero.
-  Rmat   <- diag(K)[-K, , drop = FALSE] - 1 / K
-  # Bootstrap covariance of the K estimates: captures the cross-specification
-  # dependence the shared resample induces. RVRinv weights the Wald.
-  RVRinv <- solve(Rmat %*% stats::var(D) %*% t(Rmat))
+  Rmat <- diag(K)[-K, , drop = FALSE] - 1 / K
+  RVR  <- Rmat %*% stats::var(D) %*% t(Rmat)
 
-  # Observed statistics, from the full-sample estimates.
+  # Range statistics never use the contrast covariance, so they are always
+  # defined.
   R_obs <- max(th) - min(th)
-  d_obs <- Rmat %*% th
-  W_obs <- as.numeric(t(d_obs) %*% RVRinv %*% d_obs)
-
-  # Uncentred bootstrap range and Wald, one value per replication. These are
-  # the distributions whose (1-alpha) quantiles are the equivalence bounds.
   R_unc <- apply(D, 1L, function(r) max(r) - min(r))
-  Bd    <- Rmat %*% t(D)
-  W_unc <- colSums(Bd * (RVRinv %*% Bd))
-
   # Recentred draws: subtract each spec's deviation from the cross-spec mean,
-  # theta_hat_k - mean(theta_hat), which imposes Delta = 0. (Equivalently,
-  # centre every spec at the common mean.) The common shift cancels in the
-  # range and in the contrast, so it never affects p_R or p_W; it is written
-  # this way to match the paper's definition exactly.
+  # imposing Delta = 0. The common shift cancels in the range and in the
+  # contrast, so it never affects the p-value; written to match the paper.
   Dc    <- sweep(D, 2L, th - mean(th), "-")
   R_rc  <- apply(Dc, 1L, function(r) max(r) - min(r))
-  Bdc   <- Rmat %*% t(Dc)
-  W_rc  <- colSums(Bdc * (RVRinv %*% Bdc))
+  # Monte Carlo p-value (1 + #)/(B + 1): the observed statistic joins its own
+  # reference set, so it is bounded away from zero (minimum 1/(B+1)) and uniform
+  # under the null by exchangeability (Davison and Hinkley 1997). B is the
+  # number of complete replications.
+  p_R   <- (1 + sum(R_rc >= R_obs)) / (B + 1)
 
-  # Equality p-values, Monte Carlo form (1 + #)/(B + 1): the observed statistic
-  # joins its own reference set, so the p-value is bounded away from zero
-  # (minimum 1/(B+1)) and is uniform under the null by exchangeability (Davison
-  # and Hinkley 1997). B is the number of complete replications.
-  p_R <- (1 + sum(R_rc >= R_obs)) / (B + 1)
-  p_W <- (1 + sum(W_rc >= W_obs)) / (B + 1)
+  # Wald statistics require a full-rank contrast covariance. Duplicate columns
+  # are rejected above, so a rank-deficient RVR means the specifications are
+  # genuinely collinear in the draws. Detect with a relative eigenvalue
+  # tolerance rather than a rank() call: a default rank tolerance can miss
+  # structured collinearity (e.g. one spec a constant shift of another) whose
+  # true zero eigenvalue rounding lifts to a tiny positive value. Rather than
+  # invert with a generalized inverse (a degenerate Wald), return W, p_W, and
+  # W* as NA and keep the range results.
+  ev      <- eigen(RVR, symmetric = TRUE, only.values = TRUE)$values
+  wald_ok <- max(ev) > 0 && min(ev) > 1e-12 * max(ev)
+  if (wald_ok) {
+    RVRinv <- solve(RVR)
+    d_obs  <- Rmat %*% th
+    W_obs  <- as.numeric(t(d_obs) %*% RVRinv %*% d_obs)
+    Bd     <- Rmat %*% t(D)
+    W_unc  <- colSums(Bd * (RVRinv %*% Bd))
+    Bdc    <- Rmat %*% t(Dc)
+    W_rc   <- colSums(Bdc * (RVRinv %*% Bdc))
+    p_W    <- (1 + sum(W_rc >= W_obs)) / (B + 1)
+  } else {
+    warning(sprintf(paste0("Comparison '%s': contrast covariance is rank ",
+                           "deficient (collinear specifications); Wald ",
+                           "statistics (W, p_W, W*) returned as NA. Range ",
+                           "statistics are unaffected."), label))
+    W_obs <- NA_real_
+    p_W   <- NA_real_
+    W_unc <- rep(NA_real_, B)
+    W_rc  <- rep(NA_real_, B)
+  }
 
-  # Equivalence bounds: (1-alpha) quantile of the UNCENTRED distribution,
-  # type 1 (inverse empirical c.d.f.). W_unc >= 0 always, so its quantile is
-  # non-negative and the square root is real.
+  # Equivalence bounds: (1-alpha) quantile of the uncentred distribution, type 1
+  # (inverse empirical c.d.f.). Rstar is always defined; Wstar is NA when the
+  # Wald is undefined.
   eq <- data.frame(alpha = alpha, Rstar = NA_real_, Wstar = NA_real_)
   for (a in seq_along(alpha)) {
-    eq$Rstar[a] <-      stats::quantile(R_unc, 1 - alpha[a], type = 1, names = FALSE)
-    eq$Wstar[a] <- sqrt(stats::quantile(W_unc, 1 - alpha[a], type = 1, names = FALSE))
+    eq$Rstar[a] <- stats::quantile(R_unc, 1 - alpha[a], type = 1, names = FALSE)
+    if (!anyNA(W_unc))
+      eq$Wstar[a] <- sqrt(stats::quantile(W_unc, 1 - alpha[a], type = 1, names = FALSE))
   }
 
   avg_n <- NULL
