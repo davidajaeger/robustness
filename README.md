@@ -65,6 +65,8 @@ robustness(theta, draws, comparisons = NULL,
 
 Returns an object of class `robustness` with `print`, `summary`, and `as.data.frame` methods, so results drop straight into a data frame for tables (one row per comparison-by-alpha, with columns including `R`, `W`, `p_R`, `p_W`, `Rstar`, `Wstar`). With `keep_draws = TRUE`, `bootstrap_draws()` returns the per-replication series in long form.
 
+The Wald statistics require a full-rank contrast covariance. When the specifications are collinear in the draws (for example one is a fixed shift or a linear combination of others) that covariance is singular, and `W`, `p_W`, and `W*` are returned as `NA` with a warning rather than inverted with a generalized inverse. The range statistics (`R`, `p_R`, `R*`) do not use the contrast covariance and are unaffected. Exact duplicate columns are rejected when the draws are read.
+
 ## Plotting the bootstrap distribution
 
 The range distribution is the object the "robustness" claim implicitly invokes and rarely shows. With `keep_draws = TRUE` you can plot it:
