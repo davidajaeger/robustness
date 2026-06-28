@@ -9,8 +9,11 @@
 
 * New: each per-comparison result carries `theta_bar` (the mean of the
   comparison's full-sample estimates) and `ratio` (the robustness ratio
-  `Rstar(.95) / |theta_bar|`, `NA` when `theta_bar = 0`). Both are reported
-  in the printed output and as columns of `as.data.frame()`.
+  `R*(.95) / |theta_bar|`, `NA` when `theta_bar = 0`). Both are reported in
+  the printed output and as columns of `as.data.frame()`. The ratio always
+  uses the .95 quantile of the bootstrap range, regardless of what is
+  supplied to `alpha`, so it has a fixed meaning and is comparable across
+  calls. `R*(.95)` is also exposed as a top-level field on each result.
 
 * New: `robustness()` accepts optional `se`, `labels`, `n_full`, and `n_boot`
   arguments. When `se` is supplied, the result carries a Panel A data frame
@@ -23,6 +26,11 @@
   Panel B always) followed by per-comparison detail blocks. Panel B has one
   row per comparison with `K`, `theta_bar`, `R(theta)`, `R*(.50)`,
   `R*(.95)`, `p_R`, and the robustness ratio, matching the Stata layout.
+
+* Stricter input validation: `draws` may contain `NA` (incomplete bootstrap
+  replications, dropped downstream by `max_drop`) but must not contain `Inf`
+  or `-Inf`. Comparison indices must be whole numbers; non-integer values
+  (for example `c(1.5, 2.7)`) are rejected rather than silently truncated.
 
 * Breaking: the optional `n` argument is renamed to `n_boot`. The
   `n_boot` matrix is also supported as a length-`K` vector of per-spec
