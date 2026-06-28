@@ -114,3 +114,24 @@ test_that("per-spec sample sizes are averaged and reported", {
   r <- robustness(theta, draws, n_boot = nmat)$results$all
   expect_equal(r$avg_n, c(5000, 4000, 4500))
 })
+
+test_that("non-finite draws error", {
+  set.seed(11)
+  theta <- c(0.1, 0.2)
+  draws <- matrix(rnorm(200), 100, 2)
+  draws[1, 1] <- Inf
+  expect_error(robustness(theta, draws), "Inf")
+})
+
+test_that("non-integer comparison indices error", {
+  set.seed(12)
+  theta <- c(0.1, 0.2, 0.3)
+  draws <- matrix(rnorm(300), 100, 3)
+  # Bare vector path: a single comparison given as a numeric vector.
+  expect_error(robustness(theta, draws, comparisons = c(1, 2.5)),
+               "whole numbers")
+  # Named-list path: same check should fire inside the list.
+  expect_error(robustness(theta, draws,
+                          comparisons = list(mix = c(1, 2.5))),
+               "whole numbers")
+})
