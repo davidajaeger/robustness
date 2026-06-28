@@ -24,9 +24,9 @@ a companion Wald statistic, using the bootstrap to obtain their distributions.
 
 This package computes those statistics. It takes the full-sample estimates and
 a matrix of bootstrap draws and returns, for each comparison, the range and
-Wald statistics, equivalence bounds $\delta^*(\alpha)$, and equality-test
-p-values. It is the R counterpart of the Stata `robustness` command; given the
-same draws, the two produce the same numbers.
+Wald statistics, equivalence bounds $R^*_{1-\alpha}$ and $W^*_{1-\alpha}$, and
+equality-test p-values $p_R$ and $p_W$. It is the R counterpart of the Stata
+`robustness` command; given the same draws, the two produce the same numbers.
 
 The package computes statistics from draws. It does not generate the draws. The
 section below shows how.
@@ -102,24 +102,31 @@ correct.
 
 ## Using draws generated in Stata
 
-The Stata `robustness` package saves draws as `.dta` files. To analyse them in
-R, read them with `haven` and pass the pieces to `robustness()`. The conversion
-is a few lines and lives in your own script, not in this package.
+The Stata `robustness` package saves draws as `.dta` files: a metadata file
+(specification labels, full-sample estimates and SEs), a draws file
+(`coef1`, `coef2`, ... per replication), and a comparisons file. To analyse
+them in R, read the three files with `read_robustness_dta()` and pass the
+pieces to `robustness()`. The reader uses the `haven` package
+(`install.packages("haven")`).
 
 ```{r, eval = FALSE}
-library(haven)
+x <- read_robustness_dta(
+  meta  = "output/draws/lee_draws_meta.dta",
+  draws = "output/draws/lee_draws.dta",
+  comps = "output/draws/lee_draws_comps.dta"
+)
 
-meta  <- read_dta("output/draws/lee_draws_meta.dta")
-draws <- read_dta("output/draws/lee_draws.dta")
-
-theta <- meta$theta
-D     <- as.matrix(draws[, grep("^coef[0-9]+$", names(draws))])
-
-robustness(theta, D,
-           comparisons = list(all = 1:7, main = 1:5,
-                              main_resid = 1:6,
-                              main_firstdiff = c(1, 2, 3, 4, 5, 7)))
+# Pass theta, draws, and comparisons; supply se, labels, n_full, n_boot for
+# the two-panel print (Panel A: per-spec; Panel B: per-comparison).
+robustness(x$theta, x$draws, x$comparisons,
+           se = x$se, labels = x$labels,
+           n_full = x$n_full, n_boot = x$n_boot)
 ```
+
+`read_robustness_dta()` returns a list whose components map directly onto
+the arguments of `robustness()`; it does not call `robustness()` itself.
+Users with their own R-side bootstrap can skip the reader entirely and call
+`robustness(theta, draws, ...)` directly.
 
 Because R and Stata use different random number generators, draws generated
 separately in the two languages are not identical. At a realistic number of
