@@ -136,11 +136,14 @@ print.robustness <- function(x, ...) {
   )
   cat(hdr, "\n", sep = "")
   for (r in results) {
-    # R*(.50) and R*(.95): pull the matching rows of the equivalence frame.
+    # R*(.95): always reported as the bootstrap .95 quantile of the uncentred
+    # range, computed by .range_test_one independent of the user's alpha
+    # argument (so it has a fixed meaning and is comparable across calls).
+    # R*(.50): pulled from the equivalence frame if alpha = 0.50 is in the
+    # user's request; NA otherwise.
+    rstar_95 <- r$Rstar_95
     eq50_idx <- which(r$equivalence$alpha == 0.50)
-    eq05_idx <- which(r$equivalence$alpha == 0.05)
     rstar_50 <- if (length(eq50_idx)) r$equivalence$Rstar[eq50_idx[1]] else NA_real_
-    rstar_95 <- if (length(eq05_idx)) r$equivalence$Rstar[eq05_idx[1]] else NA_real_
     # Ratio: right-justified period in width 10 when undefined, matching
     # the numeric format used otherwise.
     ratio_s  <- if (is.na(r$ratio)) "         ." else

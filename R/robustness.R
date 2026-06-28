@@ -22,7 +22,10 @@
 #' \eqn{(1-\alpha)} quantile of the uncentred bootstrap Wald statistic. The
 #' \emph{robustness ratio} is \eqn{R^*_{.95} / |\bar{\theta}|}, where
 #' \eqn{\bar{\theta}} is the mean of the comparison's estimates; it expresses
-#' the bound as a share of the typical coefficient size.
+#' the bound as a share of the typical coefficient size. The ratio always
+#' uses the .95 quantile of the bootstrap range, regardless of what is
+#' supplied to \code{alpha}, so it has a fixed meaning and is comparable
+#' across calls.
 #'
 #' \emph{Equality.} The p-values \eqn{p_R} and \eqn{p_W} are the shares of the
 #' \emph{recentred} bootstrap statistics at or above the observed statistic.
@@ -128,6 +131,12 @@ robustness <- function(theta, draws, comparisons = NULL,
     stop("draws must have one column per element of theta (",
          ncol(draws), " columns vs ", K_total, " estimates).")
   }
+  # NA in draws is acceptable (incomplete bootstrap replications, dropped
+  # downstream by max_drop); Inf and -Inf are not, since they would
+  # silently corrupt the range and the contrast covariance.
+  if (any(is.infinite(draws))) {
+    stop("draws must not contain Inf or -Inf.")
+  }
   if (!all(is.finite(theta))) {
     stop("theta must be finite (no NA, NaN, or Inf).")
   }
@@ -231,7 +240,7 @@ robustness <- function(theta, draws, comparisons = NULL,
 #          R, W       observed range and Wald statistic, from the estimates
 #          p_R, p_W   equality p-values, from the recentred bootstrap
 #          equivalence  data frame: alpha, Rstar, Wstar (one row per alpha)
-#          ratio       Rstar(0.05) / |theta_bar|, NA if theta_bar = 0
+#          ratio       R*(.95) / |theta_bar|, NA if theta_bar = 0
 #
 # The same uncentred draws are read two ways. Uncentred -> equivalence bounds
 # (Rstar, Wstar); recentred -> equality p-values (p_R, p_W). Nothing else
@@ -241,6 +250,15 @@ robustness <- function(theta, draws, comparisons = NULL,
                             keep_draws = FALSE) {
 
   if (is.null(cols)) cols <- seq_along(theta)
+  # Reject non-integer indices rather than silently truncating. A user who
+  # passes c(1.5, 2.7) should get an error, not specs 1 and 2.
+  if (anyNA(cols))
+    stop("Comparison '", label, "' contains NA in its column indices.")
+  if (!is.numeric(cols) && !is.integer(cols))
+    stop("Comparison '", label, "' column indices must be numeric.")
+  if (any(cols != as.integer(cols)))
+    stop("Comparison '", label, "' column indices must be whole numbers ",
+         "(got non-integer values).")
   cols <- as.integer(cols)
   if (anyDuplicated(cols))                         # a spec may appear only once
     stop("Comparison '", label, "' lists a specification more than once.")
@@ -330,20 +348,12 @@ robustness <- function(theta, draws, comparisons = NULL,
       eq$Wstar[a] <- sqrt(stats::quantile(W_unc, 1 - alpha[a], type = 1, names = FALSE))
   }
 
-  # Robustness ratio: Rstar(.95) (the conventional bound) divided by the
-  # magnitude of theta_bar. NA if theta_bar = 0 (the ratio is undefined).
-  # If alpha = 0.05 is not in the requested set, the ratio uses the smallest
-  # requested alpha so it always reflects "the bound" in the user's request.
-  if (0.05 %in% alpha) {
-    ratio_alpha_idx <- which(alpha == 0.05)[1]
-  } else {
-    ratio_alpha_idx <- which.min(alpha)
-  }
-  ratio <- if (abs(theta_bar) > 0) {
-    eq$Rstar[ratio_alpha_idx] / abs(theta_bar)
-  } else {
-    NA_real_
-  }
+  # Robustness ratio: R*(.95) / |theta_bar|. Always uses the .95 quantile
+  # of the uncentred range, independent of the user's alpha argument, so the
+  # ratio has a fixed meaning and is comparable across calls. NA if
+  # theta_bar = 0 (the ratio is then undefined).
+  rstar_95 <- stats::quantile(R_unc, 0.95, type = 1, names = FALSE)
+  ratio <- if (abs(theta_bar) > 0) rstar_95 / abs(theta_bar) else NA_real_
 
   # Per-spec bootstrap-average n for this comparison's specs, if available.
   avg_n <- NULL
@@ -358,7 +368,8 @@ robustness <- function(theta, draws, comparisons = NULL,
   out <- list(label = label, K = K, B = B, B_dropped = B_dropped,
               theta_bar = theta_bar,
               R = R_obs, W = W_obs, p_R = p_R, p_W = p_W, wald_ok = wald_ok,
-              equivalence = eq, ratio = ratio, avg_n = avg_n)
+              equivalence = eq, Rstar_95 = rstar_95, ratio = ratio,
+              avg_n = avg_n)
 
   # The four bootstrap series, retained only on request (each is B-length).
   # These are the distributions the summaries above collapse: the (1-alpha)
