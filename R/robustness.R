@@ -181,7 +181,11 @@ robustness <- function(theta, draws, comparisons = NULL,
   if (is.null(comparisons)) {
     comparisons <- list(all = seq_along(theta))
   } else if (!is.list(comparisons)) {
-    comparisons <- list(comparison = as.integer(comparisons))
+    # Wrap a bare vector as a single comparison. Do not coerce to integer
+    # here; .range_test_one validates and coerces below, so a bare vector
+    # of non-integers (for example c(1, 2.5)) is caught with a clear error
+    # rather than silently truncated.
+    comparisons <- list(comparison = comparisons)
   }
   if (is.null(names(comparisons)) || any(names(comparisons) == "")) {
     nm <- names(comparisons)
