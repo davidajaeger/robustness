@@ -1,3 +1,42 @@
+# robustness 0.2.0
+
+* New: `read_robustness_dta()` reads the three canonical `.dta` files
+  produced by the Stata package's bootstrap-generation step (meta, draws,
+  comps) and returns a list ready to pass to `robustness()`. Convenience for
+  users who run the Stata-side pipeline and want to consume its outputs from
+  R; `robustness()` itself still takes only in-memory inputs. Uses `haven`
+  (in `Suggests`).
+
+* New: each per-comparison result carries `theta_bar` (the mean of the
+  comparison's full-sample estimates) and `ratio` (the robustness ratio
+  `Rstar(.95) / |theta_bar|`, `NA` when `theta_bar = 0`). Both are reported
+  in the printed output and as columns of `as.data.frame()`.
+
+* New: `robustness()` accepts optional `se`, `labels`, `n_full`, and `n_boot`
+  arguments. When `se` is supplied, the result carries a Panel A data frame
+  with one row per specification (label, theta, SE, full-sample n,
+  bootstrap-average n), matching Panel A in the Stata counterpart. Without
+  `se`, Panel A is omitted and only Panel B is produced. The new accessor
+  `panel_a()` returns the Panel A data frame, or `NULL` when absent.
+
+* The print method now emits a two-panel layout (Panel A when available,
+  Panel B always) followed by per-comparison detail blocks. Panel B has one
+  row per comparison with `K`, `theta_bar`, `R(theta)`, `R*(.50)`,
+  `R*(.95)`, `p_R`, and the robustness ratio, matching the Stata layout.
+
+* Breaking: the optional `n` argument is renamed to `n_boot`. The
+  `n_boot` matrix is also supported as a length-`K` vector of per-spec
+  averages (the old `n` accepted either). Reproducing earlier results is
+  unaffected because the simulations and applications shipped with the
+  package do not pass anything through this argument.
+
+* Reproducibility: the underlying mathematics is unchanged from 0.1.x. The
+  recentring, the type-1 quantile for `R*`, the `(1 + r)/(B + 1)` p-value,
+  and the eigenvalue-based `wald_ok` test all match earlier behaviour
+  exactly. Simulation results produced with 0.1.x are reproduced bit-for-bit
+  by 0.2.0 from the same seed and draws.
+
+
 # robustness 0.1.2
 
 * The Wald statistics (`W`, `p_W`, `Wstar`) now return `NA` with a warning when

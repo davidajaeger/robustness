@@ -4,12 +4,14 @@ Range tests for equality and equivalence across specifications, from saved boots
 
 ## What it does
 
-Applied work routinely presents several specifications of the same coefficient and declares the results "robust" when the estimates look similar. The range of the estimates is the implicit object of that claim, but its joint sampling distribution is rarely reported. This package computes two statistics from bootstrap draws of the coefficient:
+Applied work routinely presents several specifications of the same coefficient and declares the results "robust" when the estimates look similar. The range of the estimates is the implicit object of that claim, but its joint sampling distribution is rarely reported. This package computes, for each comparison:
 
-- **`R*` (the minimum equivalence bound):** the smallest tolerance within which the specifications can be certified equivalent at a chosen level, in the units of the coefficient. It is the `(1 - alpha)` quantile of the uncentred bootstrap range, which is the paper's definition.
+- **`R*(.95)` (the minimum equivalence bound):** the smallest tolerance within which the specifications can be certified equivalent at the 5 percent level, in the units of the coefficient. It is the `(1 - alpha)` quantile of the uncentred bootstrap range.
+- **`R*(.50)`:** the median of the bootstrap range, a point estimate of the range.
 - **`p_R` (the range-based equality test):** the bootstrap p-value for the null that every specification shares a common probability limit.
+- the robustness ratio `R*(.95) / |theta_bar|`, where `theta_bar` is the mean estimate over the comparison's specs.
 
-The two answer different questions. A large `p_R` means the estimates cannot be told apart; a small `R*` means they are affirmatively close. Imprecise estimates do not earn robustness by default.
+The Wald statistic (`W`), its p-value (`p_W`), and the Wald bound (`W*`) are also computed, with a `wald_ok` flag for collinearity-induced rank deficiency (the Wald is returned as `NA` with a warning; the range statistics are unaffected). With `keep_draws = TRUE` the per-replication bootstrap series are retained for plotting.
 
 The package **computes statistics from draws; it does not generate the draws.** You supply the full-sample estimates and a matrix of uncentred (raw) bootstrap draws in which the same resampled units were used for every specification on each replication. Resampling specifications independently destroys the joint distribution and silently produces wrong results.
 
@@ -20,7 +22,7 @@ The package **computes statistics from draws; it does not generate the draws.** 
 remotes::install_github("davidajaeger/robustness")
 ```
 
-The package depends only on base R (>= 3.5.0) and `stats`.
+The package depends only on base R (>= 3.5.0) and `stats`. The optional `read_robustness_dta()` reader for Stata .dta files uses `haven`; install it if you plan to consume Stata pipeline outputs (`install.packages("haven")`).
 
 ## Quick start
 
@@ -28,7 +30,6 @@ A synthetic example shaped like the Lee (2008) application ships with the packag
 
 ```r
 library(robustness)
-
 robustness(lee_example$theta, lee_example$draws,
            comparisons = lee_example$comparisons)
 ```
@@ -37,35 +38,56 @@ A minimal example from scratch:
 
 ```r
 set.seed(1)
-theta <- c(0.20, 0.22, 0.19, 0.21)            # 4 full-sample estimates
-draws <- sapply(theta, function(m) rnorm(999, m, 0.03))  # 999 x 4 uncentred draws
+theta <- c(0.20, 0.22, 0.19, 0.21)
+draws <- sapply(theta, function(m) rnorm(9999, m, 0.03))   # 9999 x 4 uncentred draws
 
 robustness(theta, draws)
 
-# several comparison sets at once
+# Several comparisons at once
 robustness(theta, draws,
            comparisons = list(all = 1:4, first_two = 1:2, extremes = c(1, 4)))
 ```
 
-## Interface
+## Two workflows
+
+The package supports two ways of supplying inputs.
+
+### Workflow 1: R-native draws
+
+Build `theta` (length-K numeric vector) and `draws` (B × K numeric matrix) from your own R bootstrap. The column order of `draws` must match `theta`. Optionally supply `se` (length-K vector of full-sample standard errors), `labels`, `n_full`, and `n_boot` for Panel A reporting.
 
 ```r
-robustness(theta, draws, comparisons = NULL,
-           alpha = c(0.50, 0.05), n = NULL, max_drop = 0.01,
-           keep_draws = FALSE)
+result <- robustness(theta, draws,
+                     comparisons = list(all = 1:K),
+                     se     = full_sample_se,
+                     labels = c("Baseline", "+X1", "+X2", "+X1+X2"),
+                     n_full = c(2000, 2000, 2000, 2000))
+print(result)
 ```
 
-- **`theta`** — numeric vector of `K` full-sample point estimates.
-- **`draws`** — `B` x `K` numeric matrix of uncentred bootstrap draws; column `k` matches `theta[k]`.
-- **`comparisons`** — a single integer vector of column indices, or a named list of integer vectors for several comparisons. Defaults to all specifications as one comparison.
-- **`alpha`** — significance levels for the equivalence bounds. Defaults to `c(0.50, 0.05)`: the median bound (a point estimate of the range) and the 95th-percentile upper bound.
-- **`n`** — optional per-specification sample sizes, reported descriptively.
-- **`max_drop`** — maximum proportion of incomplete replications tolerated before the function stops. Defaults to `0.01`.
-- **`keep_draws`** — if `TRUE`, the per-replication bootstrap series are retained on each comparison's result and can be extracted with `bootstrap_draws()` for plotting. Defaults to `FALSE`, since these are `B`-length vectors per comparison.
+If `se` is supplied, the print method emits a two-panel layout (Panel A: per-spec; Panel B: per-comparison). If not, only Panel B and the per-comparison detail blocks are shown.
 
-Returns an object of class `robustness` with `print`, `summary`, and `as.data.frame` methods, so results drop straight into a data frame for tables (one row per comparison-by-alpha, with columns including `R`, `W`, `p_R`, `p_W`, `Rstar`, `Wstar`). With `keep_draws = TRUE`, `bootstrap_draws()` returns the per-replication series in long form.
+### Workflow 2: Stata pipeline files
 
-The Wald statistics require a full-rank contrast covariance. When the specifications are collinear in the draws (for example one is a fixed shift or a linear combination of others) that covariance is singular, and `W`, `p_W`, and `W*` are returned as `NA` with a warning rather than inverted with a generalized inverse. The range statistics (`R`, `p_R`, `R*`) do not use the contrast covariance and are unaffected. Exact duplicate columns are rejected when the draws are read.
+If you run the Stata `robustness` generation pipeline and want to consume its three canonical `.dta` files from R, use `read_robustness_dta()`:
+
+```r
+x <- read_robustness_dta(
+  meta  = "output/draws/lee_draws_meta.dta",
+  draws = "output/draws/lee_draws.dta",
+  comps = "output/draws/lee_draws_comps.dta"
+)
+result <- robustness(x$theta, x$draws, x$comparisons,
+                     se = x$se, labels = x$labels,
+                     n_full = x$n_full, n_boot = x$n_boot)
+print(result)
+```
+
+`read_robustness_dta()` returns a plain list whose components map directly onto the arguments of `robustness()`. The reader uses `haven`.
+
+## Output
+
+`robustness()` returns an object of class `"robustness"` with `print`, `summary`, and `as.data.frame` methods. The `as.data.frame` method returns one row per comparison-by-alpha, with columns `comparison`, `K`, `B`, `theta_bar`, `R`, `W`, `p_R`, `p_W`, `wald_ok`, `alpha`, `Rstar`, `Wstar`, `ratio`. `panel_a()` returns the Panel A data frame when available, `NULL` otherwise.
 
 ## Plotting the bootstrap distribution
 
@@ -74,13 +96,13 @@ The range distribution is the object the "robustness" claim implicitly invokes a
 ```r
 r <- robustness(theta, draws, keep_draws = TRUE)
 
-# per-replication series, long: comparison, draw, range_unc, range_rc, wald_unc, wald_rc
+# Per-replication series: comparison, draw, range_unc, range_rc, wald_unc, wald_rc
 d <- bootstrap_draws(r)
 
-# range distribution for one comparison, with the equivalence bound marked.
+# Range distribution for one comparison, with the equivalence bound marked.
 # Read R* from the result rather than recomputing it: R* is a type-1 order
-# statistic, so quantile() with its default (type 7) would interpolate and the
-# line would sit a hair off. (If you do recompute, pass type = 1.)
+# statistic, so quantile() with its default (type 7) would interpolate and
+# the line would sit a hair off. (If you do recompute, pass type = 1.)
 tab   <- as.data.frame(r)
 bound <- tab$Rstar[tab$comparison == "all" & tab$alpha == 0.05]   # R*(.95)
 hist(d$range_unc[d$comparison == "all"], breaks = 40,
