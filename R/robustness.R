@@ -19,7 +19,10 @@
 #' bootstrap ranges are \eqn{\leq d}. This is the type-1 sample quantile and
 #' is exactly the definition in the paper. \eqn{W^*_{1-\alpha}} is the
 #' analogous bound on the Wald (Mahalanobis) scale, the square root of the
-#' \eqn{(1-\alpha)} quantile of the uncentred bootstrap Wald statistic.
+#' \eqn{(1-\alpha)} quantile of the uncentred bootstrap Wald statistic. The
+#' \emph{robustness ratio} is \eqn{R^*_{.95} / |\bar{\theta}|}, where
+#' \eqn{\bar{\theta}} is the mean of the comparison's estimates; it expresses
+#' the bound as a share of the typical coefficient size.
 #'
 #' \emph{Equality.} The p-values \eqn{p_R} and \eqn{p_W} are the shares of the
 #' \emph{recentred} bootstrap statistics at or above the observed statistic.
@@ -35,6 +38,13 @@
 #' replication. Drawing specifications independently silently destroys the
 #' joint distribution and gives wrong p-values and bounds.
 #'
+#' \emph{Panel A.} When the optional \code{se} argument is supplied (full-sample
+#' standard errors per specification), the result carries a Panel A data frame
+#' with one row per specification: label, full-sample estimate, full-sample SE,
+#' full-sample n, and bootstrap-average n. This matches Panel A from the Stata
+#' counterpart. Without \code{se}, Panel A is omitted and only Panel B (the
+#' per-comparison statistics) is produced.
+#'
 #' @param theta Numeric vector of \eqn{K} full-sample point estimates.
 #' @param draws Numeric matrix of uncentred bootstrap draws, \eqn{B} rows by
 #'   \eqn{K} columns, column \eqn{k} matching \code{theta[k]}.
@@ -42,12 +52,24 @@
 #'   comparison), or a named list of integer vectors (several comparisons, the
 #'   names labelling them). Defaults to all specifications as one comparison
 #'   named \code{"all"}.
+#' @param se Optional numeric vector of \eqn{K} full-sample standard errors
+#'   (column \eqn{k} matching \code{theta[k]}). When supplied alongside
+#'   \code{theta} (and any of \code{n_full}, \code{n_boot}, \code{labels}),
+#'   the result carries a Panel A summary. Defaults to \code{NULL}, in which
+#'   case Panel A is omitted.
+#' @param labels Optional character vector of \eqn{K} specification labels,
+#'   used to label rows of Panel A. Defaults to \code{NULL}, in which case
+#'   generic labels (\code{Spec 1}, ..., \code{Spec K}) are used when Panel A
+#'   is printed.
+#' @param n_full Optional length-\eqn{K} numeric vector of full-sample sizes
+#'   per specification. Reported in Panel A; descriptive only.
+#' @param n_boot Optional \eqn{B} by \eqn{K} numeric matrix or length-\eqn{K}
+#'   numeric vector of per-rep or per-spec bootstrap sample sizes. When a
+#'   matrix, column means appear in Panel A as average bootstrap n.
+#'   Descriptive only; does not enter any statistic.
 #' @param alpha Numeric vector of significance levels for the equivalence
 #'   bounds. Defaults to \code{c(0.50, 0.05)}, giving \eqn{R^*_{.50}} (the
 #'   median of the bootstrap range) and \eqn{R^*_{.95}} (the bound).
-#' @param n Optional per-specification sample sizes: a \eqn{B} by \eqn{K}
-#'   matrix or a length-\eqn{K} vector. Reported descriptively; does not enter
-#'   any statistic.
 #' @param max_drop Maximum proportion of incomplete bootstrap replications
 #'   tolerated before the function stops. Defaults to 0.01.
 #' @param keep_draws Logical. If \code{TRUE}, the per-replication bootstrap
@@ -56,15 +78,14 @@
 #'   for plotting. Defaults to \code{FALSE}, since these are \eqn{B}-length
 #'   vectors per comparison.
 #'
-#' @return An object of class \code{"robustness"}: a list of per-comparison
-#'   results (each of class \code{"range_test"}), with \code{print},
-#'   \code{summary}, and \code{as.data.frame} methods. Each result carries a
-#'   logical \code{wald_ok}; when the contrast covariance is rank deficient
-#'   (collinear specifications) it is \code{FALSE} and the Wald statistics
-#'   \code{W}, \code{p_W}, and \code{Wstar} are \code{NA}, while the range
-#'   statistics \code{R}, \code{p_R}, and \code{Rstar} are unaffected. With
-#'   \code{keep_draws = TRUE}, \code{\link{bootstrap_draws}} returns the
-#'   per-replication series in long form.
+#' @return An object of class \code{"robustness"}: a list with \code{results}
+#'   (per-comparison \code{"range_test"} objects, each carrying
+#'   \code{theta_bar}, \code{R}, \code{p_R}, \code{W}, \code{p_W},
+#'   \code{equivalence} (alpha, Rstar, Wstar), \code{ratio}, \code{wald_ok},
+#'   \code{K}, \code{B}, \code{B_dropped}), and a \code{panel_a} field (a data
+#'   frame when \code{se} is supplied, \code{NULL} otherwise). Methods include
+#'   \code{print}, \code{summary}, \code{as.data.frame},
+#'   \code{\link{panel_a}}, and \code{\link{bootstrap_draws}}.
 #'
 #' @references
 #' Jaeger, David A. (2026). Robustness? Range Tests for Equality and
@@ -75,27 +96,37 @@
 #' theta <- c(0.20, 0.22, 0.19, 0.21)
 #' draws <- sapply(theta, function(m) rnorm(9999, m, 0.03))
 #' robustness(theta, draws)
+#'
+#' # With Panel A: supply SEs (and optionally labels and sample sizes)
+#' robustness(theta, draws,
+#'            se = c(0.025, 0.024, 0.026, 0.025),
+#'            labels = c("Baseline", "+X1", "+X2", "+X1+X2"))
+#'
+#' # Several comparisons
 #' robustness(theta, draws,
 #'            comparisons = list(all = 1:4, first_two = 1:2, extremes = c(1, 4)))
 #'
-#' # Retain the bootstrap series and plot the range distribution:
+#' # Retain bootstrap series for plotting
 #' r <- robustness(theta, draws, keep_draws = TRUE)
 #' d <- bootstrap_draws(r)
 #' hist(d$range_unc[d$comparison == "all"])
 #'
 #' @export
 robustness <- function(theta, draws, comparisons = NULL,
-                       alpha = c(0.50, 0.05), n = NULL, max_drop = 0.01,
-                       keep_draws = FALSE) {
+                       se = NULL, labels = NULL,
+                       n_full = NULL, n_boot = NULL,
+                       alpha = c(0.50, 0.05),
+                       max_drop = 0.01, keep_draws = FALSE) {
 
   theta <- as.numeric(theta)
+  K_total <- length(theta)
   draws <- as.matrix(draws)
   if (!is.numeric(draws)) {
     stop("draws must be numeric.")
   }
-  if (ncol(draws) != length(theta)) {
+  if (ncol(draws) != K_total) {
     stop("draws must have one column per element of theta (",
-         ncol(draws), " columns vs ", length(theta), " estimates).")
+         ncol(draws), " columns vs ", K_total, " estimates).")
   }
   if (!all(is.finite(theta))) {
     stop("theta must be finite (no NA, NaN, or Inf).")
@@ -107,6 +138,35 @@ robustness <- function(theta, draws, comparisons = NULL,
   }
   if (!is.finite(max_drop) || max_drop < 0 || max_drop >= 1) {
     stop("max_drop must be in [0, 1).")
+  }
+
+  # Optional Panel A inputs: validate dimensions where supplied.
+  if (!is.null(se)) {
+    se <- as.numeric(se)
+    if (length(se) != K_total)
+      stop("se must have length ", K_total, " (matching theta).")
+  }
+  if (!is.null(labels)) {
+    labels <- as.character(labels)
+    if (length(labels) != K_total)
+      stop("labels must have length ", K_total, " (matching theta).")
+  }
+  if (!is.null(n_full)) {
+    n_full <- as.numeric(n_full)
+    if (length(n_full) != K_total)
+      stop("n_full must have length ", K_total, " (matching theta).")
+  }
+  if (!is.null(n_boot)) {
+    if (is.matrix(n_boot)) {
+      if (ncol(n_boot) != K_total)
+        stop("n_boot matrix must have ", K_total, " columns (matching theta).")
+      if (nrow(n_boot) != nrow(draws))
+        stop("n_boot matrix must have ", nrow(draws), " rows (matching draws).")
+    } else {
+      n_boot <- as.numeric(n_boot)
+      if (length(n_boot) != K_total)
+        stop("n_boot vector must have length ", K_total, " (matching theta).")
+    }
   }
 
   if (is.null(comparisons)) {
@@ -124,13 +184,37 @@ robustness <- function(theta, draws, comparisons = NULL,
 
   results <- lapply(names(comparisons), function(cn) {
     .range_test_one(theta, draws, cols = comparisons[[cn]],
-                    alpha = alpha, n = n, max_drop = max_drop, label = cn,
-                    keep_draws = keep_draws)
+                    alpha = alpha, n_boot = n_boot, max_drop = max_drop,
+                    label = cn, keep_draws = keep_draws)
   })
   names(results) <- names(comparisons)
 
+  # Panel A: built only when SE is supplied. Other inputs (labels, n_full,
+  # n_boot) are optional even within Panel A; missing columns appear as NA.
+  panel_a <- NULL
+  if (!is.null(se)) {
+    pa_labels <- if (is.null(labels)) paste("Spec", seq_len(K_total)) else labels
+    pa_n_full <- if (is.null(n_full)) rep(NA_real_, K_total) else n_full
+    pa_n_boot_avg <- if (is.null(n_boot)) {
+      rep(NA_real_, K_total)
+    } else if (is.matrix(n_boot)) {
+      colMeans(n_boot, na.rm = TRUE)
+    } else {
+      n_boot
+    }
+    panel_a <- data.frame(
+      spec       = pa_labels,
+      theta      = theta,
+      se         = se,
+      n_full     = pa_n_full,
+      n_boot     = pa_n_boot_avg,
+      stringsAsFactors = FALSE
+    )
+  }
+
   out <- list(results = results, alpha = alpha,
-              K_total = length(theta), B = nrow(draws))
+              K_total = K_total, B = nrow(draws),
+              panel_a = panel_a)
   class(out) <- "robustness"
   out
 }
@@ -143,15 +227,17 @@ robustness <- function(theta, draws, comparisons = NULL,
 #          cols   the specifications in this comparison (column indices)
 #
 # Output (class "range_test"):
+#          theta_bar  mean of th, the comparison's grand mean
 #          R, W       observed range and Wald statistic, from the estimates
 #          p_R, p_W   equality p-values, from the recentred bootstrap
 #          equivalence  data frame: alpha, Rstar, Wstar (one row per alpha)
+#          ratio       Rstar(0.05) / |theta_bar|, NA if theta_bar = 0
 #
 # The same uncentred draws are read two ways. Uncentred -> equivalence bounds
 # (Rstar, Wstar); recentred -> equality p-values (p_R, p_W). Nothing else
 # differs between the two.
 .range_test_one <- function(theta, draws, cols = NULL, alpha = c(0.50, 0.05),
-                            n = NULL, max_drop = 0.01, label = NULL,
+                            n_boot = NULL, max_drop = 0.01, label = NULL,
                             keep_draws = FALSE) {
 
   if (is.null(cols)) cols <- seq_along(theta)
@@ -190,12 +276,13 @@ robustness <- function(theta, draws, comparisons = NULL,
 
   # Range statistics never use the contrast covariance, so they are always
   # defined.
-  R_obs <- max(th) - min(th)
-  R_unc <- apply(D, 1L, function(r) max(r) - min(r))
+  R_obs     <- max(th) - min(th)
+  theta_bar <- mean(th)
+  R_unc     <- apply(D, 1L, function(r) max(r) - min(r))
   # Recentred draws: subtract each spec's deviation from the cross-spec mean,
   # imposing Delta = 0. The common shift cancels in the range and in the
   # contrast, so it never affects the p-value; written to match the paper.
-  Dc    <- sweep(D, 2L, th - mean(th), "-")
+  Dc    <- sweep(D, 2L, th - theta_bar, "-")
   R_rc  <- apply(Dc, 1L, function(r) max(r) - min(r))
   # Monte Carlo p-value (1 + #)/(B + 1): the observed statistic joins its own
   # reference set, so it is bounded away from zero (minimum 1/(B+1)) and uniform
@@ -243,15 +330,35 @@ robustness <- function(theta, draws, comparisons = NULL,
       eq$Wstar[a] <- sqrt(stats::quantile(W_unc, 1 - alpha[a], type = 1, names = FALSE))
   }
 
+  # Robustness ratio: Rstar(.95) (the conventional bound) divided by the
+  # magnitude of theta_bar. NA if theta_bar = 0 (the ratio is undefined).
+  # If alpha = 0.05 is not in the requested set, the ratio uses the smallest
+  # requested alpha so it always reflects "the bound" in the user's request.
+  if (0.05 %in% alpha) {
+    ratio_alpha_idx <- which(alpha == 0.05)[1]
+  } else {
+    ratio_alpha_idx <- which.min(alpha)
+  }
+  ratio <- if (abs(theta_bar) > 0) {
+    eq$Rstar[ratio_alpha_idx] / abs(theta_bar)
+  } else {
+    NA_real_
+  }
+
+  # Per-spec bootstrap-average n for this comparison's specs, if available.
   avg_n <- NULL
-  if (!is.null(n)) {
-    if (is.matrix(n)) avg_n <- colMeans(n[ok, cols, drop = FALSE], na.rm = TRUE)
-    else              avg_n <- as.numeric(n)[cols]
+  if (!is.null(n_boot)) {
+    if (is.matrix(n_boot)) {
+      avg_n <- colMeans(n_boot[ok, cols, drop = FALSE], na.rm = TRUE)
+    } else {
+      avg_n <- as.numeric(n_boot)[cols]
+    }
   }
 
   out <- list(label = label, K = K, B = B, B_dropped = B_dropped,
+              theta_bar = theta_bar,
               R = R_obs, W = W_obs, p_R = p_R, p_W = p_W, wald_ok = wald_ok,
-              equivalence = eq, avg_n = avg_n)
+              equivalence = eq, ratio = ratio, avg_n = avg_n)
 
   # The four bootstrap series, retained only on request (each is B-length).
   # These are the distributions the summaries above collapse: the (1-alpha)
