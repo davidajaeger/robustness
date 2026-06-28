@@ -7,7 +7,7 @@ Range tests for equality and equivalence across specifications, from saved boots
 Applied work routinely presents several specifications of the same coefficient and declares the results "robust" when the estimates look similar. The range of the estimates is the implicit object of that claim, but its joint sampling distribution is rarely reported. This package computes, for each comparison:
 
 - **`R*(.95)` (the minimum equivalence bound):** the smallest tolerance within which the specifications can be certified equivalent at the 5 percent level, in the units of the coefficient. It is the `(1 - alpha)` quantile of the uncentred bootstrap range.
-- **`R*(.50)`:** the median of the bootstrap range, a point estimate of the range.
+- **`R*(.50)`:** the median of the uncentred bootstrap range distribution.
 - **`p_R` (the range-based equality test):** the bootstrap p-value for the null that every specification shares a common probability limit.
 - the robustness ratio `R*(.95) / |theta_bar|`, where `theta_bar` is the mean estimate over the comparison's specs.
 
