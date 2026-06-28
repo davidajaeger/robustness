@@ -312,14 +312,15 @@ robustness <- function(theta, draws, comparisons = NULL,
   # number of complete replications.
   p_R   <- (1 + sum(R_rc >= R_obs)) / (B + 1)
 
-  # Wald statistics require a full-rank contrast covariance. Duplicate columns
-  # are rejected above, so a rank-deficient RVR means the specifications are
-  # genuinely collinear in the draws. Detect with a relative eigenvalue
-  # tolerance rather than a rank() call: a default rank tolerance can miss
-  # structured collinearity (e.g. one spec a constant shift of another) whose
-  # true zero eigenvalue rounding lifts to a tiny positive value. Rather than
-  # invert with a generalized inverse (a degenerate Wald), return W, p_W, and
-  # W* as NA and keep the range results.
+  # Wald statistics require a full-rank contrast covariance. Duplicate
+  # specification references within a comparison are rejected above; a
+  # rank-deficient RVR here therefore means distinct specifications are
+  # collinear in the draws. Detect with a relative eigenvalue tolerance
+  # rather than a rank() call: a default rank tolerance can miss structured
+  # collinearity (e.g. one spec a constant shift of another) whose true zero
+  # eigenvalue rounding lifts to a tiny positive value. Rather than invert
+  # with a generalized inverse (a degenerate Wald), return W, p_W, and W*
+  # as NA and keep the range results.
   ev      <- eigen(RVR, symmetric = TRUE, only.values = TRUE)$values
   wald_ok <- max(ev) > 0 && min(ev) > 1e-12 * max(ev)
   if (wald_ok) {
