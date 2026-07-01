@@ -114,7 +114,7 @@ The uncentred series (`range_unc`, `wald_unc`) are the ones whose `(1 - alpha)` 
 
 ## Generating the draws
 
-The package consumes draws; it does not produce them. The vignette (`vignette("robustness")`) gives a worked generation example, and the [Stata replication package](https://github.com/davidajaeger/robustness-replications) for Jaeger (2026) contains the generation scripts used for each application in the paper. The single requirement is that every specification on a given replication is estimated on the **same** resampled units.
+The package takes the boostrapped estimates as input, it does not produce them. The vignette (`vignette("robustness")`) gives a worked generation example, and the [Stata replication package](https://github.com/davidajaeger/robustness-replications) for Jaeger (2026) contains the generation scripts used for each application in the paper. The single requirement is that every specification on a given replication is estimated on the **same** resampled units.
 
 ## Citing
 
