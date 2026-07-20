@@ -73,6 +73,13 @@
 #' @param alpha Numeric vector of significance levels for the equivalence
 #'   bounds. Defaults to \code{c(0.50, 0.05)}, giving \eqn{R^*_{.50}} (the
 #'   median of the bootstrap range) and \eqn{R^*_{.95}} (the bound).
+#' @param tau Optional single positive number, the pre-specified equivalence
+#'   tolerance \eqn{\tau} (the largest \eqn{\Delta} judged consistent with
+#'   robustness). When supplied, each comparison reports the equivalence
+#'   p-value \eqn{p_\tau}, the add-one share of uncentred bootstrap ranges at
+#'   or above \eqn{\tau}. By the duality of Jaeger (2026), \eqn{p_\tau \le
+#'   \alpha} exactly when \eqn{R^*_{1-\alpha} \le \tau}. Defaults to
+#'   \code{NULL} (\eqn{p_\tau} omitted).
 #' @param max_drop Maximum proportion of incomplete bootstrap replications
 #'   tolerated before the function stops. Defaults to 0.01.
 #' @param keep_draws Logical. If \code{TRUE}, the per-replication bootstrap
@@ -84,7 +91,8 @@
 #' @return An object of class \code{"robustness"}: a list with \code{results}
 #'   (per-comparison \code{"range_test"} objects, each carrying
 #'   \code{theta_bar}, \code{R}, \code{p_R}, \code{W}, \code{p_W},
-#'   \code{equivalence} (alpha, Rstar, Wstar), \code{ratio}, \code{wald_ok},
+#'   \code{equivalence} (alpha, Rstar, Wstar), \code{ratio}, \code{tau},
+#'   \code{p_tau}, \code{wald_ok},
 #'   \code{K}, \code{B}, \code{B_dropped}), and a \code{panel_a} field (a data
 #'   frame when \code{se} is supplied, \code{NULL} otherwise). Methods include
 #'   \code{print}, \code{summary}, \code{as.data.frame},
@@ -109,6 +117,9 @@
 #' robustness(theta, draws,
 #'            comparisons = list(all = 1:4, first_two = 1:2, extremes = c(1, 4)))
 #'
+#' # Pre-specified equivalence tolerance: also report p_tau
+#' robustness(theta, draws, tau = 0.05)
+#'
 #' # Retain bootstrap series for plotting
 #' r <- robustness(theta, draws, keep_draws = TRUE)
 #' d <- bootstrap_draws(r)
@@ -118,7 +129,7 @@
 robustness <- function(theta, draws, comparisons = NULL,
                        se = NULL, labels = NULL,
                        n_full = NULL, n_boot = NULL,
-                       alpha = c(0.50, 0.05),
+                       alpha = c(0.50, 0.05), tau = NULL,
                        max_drop = 0.01, keep_draws = FALSE) {
 
   theta <- as.numeric(theta)
@@ -144,6 +155,11 @@ robustness <- function(theta, draws, comparisons = NULL,
   if (length(alpha) == 0L || any(!is.finite(alpha)) ||
       any(alpha <= 0 | alpha >= 1)) {
     stop("alpha must be strictly between 0 and 1.")
+  }
+  if (!is.null(tau)) {
+    tau <- as.numeric(tau)
+    if (length(tau) != 1L || !is.finite(tau) || tau <= 0)
+      stop("tau must be a single finite positive number (the equivalence tolerance).")
   }
   if (!is.finite(max_drop) || max_drop < 0 || max_drop >= 1) {
     stop("max_drop must be in [0, 1).")
@@ -197,7 +213,7 @@ robustness <- function(theta, draws, comparisons = NULL,
 
   results <- lapply(names(comparisons), function(cn) {
     .range_test_one(theta, draws, cols = comparisons[[cn]],
-                    alpha = alpha, n_boot = n_boot, max_drop = max_drop,
+                    alpha = alpha, tau = tau, n_boot = n_boot, max_drop = max_drop,
                     label = cn, keep_draws = keep_draws)
   })
   names(results) <- names(comparisons)
@@ -250,7 +266,7 @@ robustness <- function(theta, draws, comparisons = NULL,
 # (Rstar, Wstar); recentred -> equality p-values (p_R, p_W). Nothing else
 # differs between the two.
 .range_test_one <- function(theta, draws, cols = NULL, alpha = c(0.50, 0.05),
-                            n_boot = NULL, max_drop = 0.01, label = NULL,
+                            tau = NULL, n_boot = NULL, max_drop = 0.01, label = NULL,
                             keep_draws = FALSE) {
 
   if (is.null(cols)) cols <- seq_along(theta)
@@ -311,6 +327,13 @@ robustness <- function(theta, draws, comparisons = NULL,
   # under the null by exchangeability (Davison and Hinkley 1997). B is the
   # number of complete replications.
   p_R   <- (1 + sum(R_rc >= R_obs)) / (B + 1)
+
+  # Equivalence p-value at a pre-specified tolerance tau (when supplied): the
+  # add-one share of the UNCENTRED bootstrap ranges at or above tau, the same
+  # >= convention as p_R. This is the direct dual of R*: by the duality lemma,
+  # p_tau <= alpha iff R*_{1-alpha} <= tau. No new resampling; a second reading
+  # of R_unc, whose (1-alpha) quantile is R*.
+  p_tau <- if (!is.null(tau)) (1 + sum(R_unc >= tau)) / (B + 1) else NA_real_
 
   # Wald statistics require a full-rank contrast covariance. Duplicate
   # specification references within a comparison are rejected above; a
@@ -374,6 +397,7 @@ robustness <- function(theta, draws, comparisons = NULL,
               theta_bar = theta_bar,
               R = R_obs, W = W_obs, p_R = p_R, p_W = p_W, wald_ok = wald_ok,
               equivalence = eq, Rstar_95 = rstar_95, ratio = ratio,
+              tau = if (is.null(tau)) NA_real_ else tau, p_tau = p_tau,
               avg_n = avg_n)
 
   # The four bootstrap series, retained only on request (each is B-length).

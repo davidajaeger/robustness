@@ -21,6 +21,10 @@ print.range_test <- function(x, ...) {
     cat(sprintf("  Robustness ratio = %9.5f   (R*(.95) / |theta_bar|)\n",
                 x$ratio))
   }
+  if (!is.na(x$tau)) {
+    cat(sprintf("  Equivalence   tau = %9.5f   p_tau = %7.4f\n", x$tau, x$p_tau))
+    cat("                (reject H0: Delta >= tau at level alpha when p_tau <= alpha)\n")
+  }
   if (isFALSE(x$wald_ok)) {
     cat("  Wald undefined: contrast covariance rank deficient.\n")
     cat("  Range statistics above are valid.\n")
@@ -56,6 +60,9 @@ print.robustness <- function(x, ...) {
   cat(sprintf("  B = %d (supplied)   comparisons = %d   alpha = %s\n",
               x$B, length(x$results),
               paste(formatC(x$alpha, format = "g"), collapse = ", ")))
+  tau_val <- if (length(x$results)) x$results[[1]]$tau else NA_real_
+  if (!is.na(tau_val))
+    cat(sprintf("  equivalence tolerance tau = %s\n", formatC(tau_val, format = "g")))
   cat(strrep("=", 70), "\n", sep = "")
 
   # Panel A: specification-level estimates, only when available.
@@ -124,6 +131,7 @@ print.robustness <- function(x, ...) {
 .print_panel_b_rows <- function(results) {
   cnames <- vapply(results, function(r) r$label %||% "comparison", character(1))
   cn_w <- max(nchar(cnames), nchar("Comparison set")) + 2L
+  has_tau <- any(vapply(results, function(r) !is.na(r$tau), logical(1)))
   hdr <- paste0(
     "  ", formatC("Comparison set", width = -cn_w),
     formatC("K",          width = 3),
@@ -134,6 +142,7 @@ print.robustness <- function(x, ...) {
     " ", formatC("p_R",        width = 8),
     " ", formatC("Rob. ratio", width = 10)
   )
+  if (has_tau) hdr <- paste0(hdr, " ", formatC("p_tau", width = 8))
   cat(hdr, "\n", sep = "")
   for (r in results) {
     # R*(.95): always reported as the bootstrap .95 quantile of the uncentred
@@ -157,6 +166,10 @@ print.robustness <- function(x, ...) {
       " ", formatC(rstar_95,    width = 10, digits = 5, format = "f"),
       " ", formatC(r$p_R,       width = 8,  digits = 4, format = "f"),
       " ", ratio_s,
+      if (has_tau) {
+        if (is.na(r$p_tau)) paste0(" ", formatC(".", width = 8))
+        else paste0(" ", formatC(r$p_tau, width = 8, digits = 4, format = "f"))
+      } else "",
       "\n", sep = ""
     )
   }
@@ -191,6 +204,8 @@ as.data.frame.robustness <- function(x, row.names = NULL, optional = FALSE,
       Rstar      = r$equivalence$Rstar,
       Wstar      = r$equivalence$Wstar,
       ratio      = r$ratio,
+      tau        = r$tau,
+      p_tau      = r$p_tau,
       stringsAsFactors = FALSE
     )
   })
