@@ -1,3 +1,12 @@
+# robustness 0.3.0
+
+* `robustness()` gains a `tau` argument: a pre-specified equivalence tolerance.
+  When supplied, each comparison reports `p_tau`, the equivalence p-value at
+  `tau` -- the add-one share of uncentred bootstrap ranges at or above `tau`.
+  By the duality of Jaeger (2026), `p_tau <= alpha` iff `R*_{1-alpha} <= tau`.
+  Shown in `print()`, and added to `as.data.frame()` / `summary()`. Mirrors the
+  Stata command's new `tau()` option and `r(tau)`.
+
 # robustness 0.2.0
 
 * New: `read_robustness_dta()` reads the three canonical `.dta` files

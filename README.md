@@ -10,6 +10,7 @@ Applied work routinely presents several specifications of the same coefficient a
 - **`R*(.50)`:** the median of the uncentred bootstrap range distribution.
 - **`p_R` (the range-based equality test):** the bootstrap p-value for the null that every specification shares a common probability limit.
 - the robustness ratio `R*(.95) / |theta_bar|`, where `theta_bar` is the mean estimate over the comparison's specs.
+- **`p_tau` (the equivalence test at a pre-specified tolerance), when `tau` is supplied:** the bootstrap p-value for the null that the disagreement across specifications is at least `tau` -- the largest disagreement you would still call robust. It is the add-one share of uncentred bootstrap ranges at or above `tau`, and by the duality in the paper `p_tau <= alpha` exactly when `R*(1-alpha) <= tau`.
 
 The Wald statistic (`W`), its p-value (`p_W`), and the Wald bound (`W*`) are also computed, with a `wald_ok` flag for collinearity-induced rank deficiency (the Wald is returned as `NA` with a warning; the range statistics are unaffected). With `keep_draws = TRUE` the per-replication bootstrap series are retained for plotting.
 
@@ -46,6 +47,9 @@ robustness(theta, draws)
 # Several comparisons at once
 robustness(theta, draws,
            comparisons = list(all = 1:4, first_two = 1:2, extremes = c(1, 4)))
+
+# With a pre-specified equivalence tolerance: also report p_tau
+robustness(theta, draws, tau = 0.02)
 ```
 
 ## Two workflows
@@ -87,7 +91,7 @@ print(result)
 
 ## Output
 
-`robustness()` returns an object of class `"robustness"` with `print`, `summary`, and `as.data.frame` methods. The `as.data.frame` method returns one row per comparison-by-alpha, with columns `comparison`, `K`, `B`, `theta_bar`, `R`, `W`, `p_R`, `p_W`, `wald_ok`, `alpha`, `Rstar`, `Wstar`, `ratio`. `panel_a()` returns the Panel A data frame when available, `NULL` otherwise.
+`robustness()` returns an object of class `"robustness"` with `print`, `summary`, and `as.data.frame` methods. The `as.data.frame` method returns one row per comparison-by-alpha, with columns `comparison`, `K`, `B`, `theta_bar`, `R`, `W`, `p_R`, `p_W`, `wald_ok`, `alpha`, `Rstar`, `Wstar`, `ratio`, `tau`, `p_tau` (the last two `NA` unless `tau` was supplied). `panel_a()` returns the Panel A data frame when available, `NULL` otherwise.
 
 ## Plotting the bootstrap distribution
 
