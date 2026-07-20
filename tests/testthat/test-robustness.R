@@ -135,3 +135,49 @@ test_that("non-integer comparison indices error", {
                           comparisons = list(mix = c(1, 2.5))),
                "whole numbers")
 })
+
+# Pre-specified equivalence tolerance (tau).
+test_that("tau reports p_tau matching the add-one share of uncentred ranges >= tau", {
+  set.seed(1)
+  theta <- c(0.20, 0.22, 0.19, 0.21)
+  B <- 9999
+  draws <- sapply(theta, function(m) rnorm(B, m, 0.03))
+  r   <- robustness(theta, draws, alpha = c(0.50, 0.05), tau = 0.05, keep_draws = TRUE)
+  res <- r$results[[1]]
+  expect_false(is.na(res$p_tau))
+  d  <- bootstrap_draws(r)
+  ru <- d$range_unc[d$comparison == names(r$results)[1]]
+  expect_equal(res$p_tau, (1 + sum(ru >= 0.05)) / (length(ru) + 1))
+})
+
+test_that("tau honours the duality with R*_{.95}", {
+  set.seed(1)
+  theta <- c(0.20, 0.22, 0.19, 0.21)
+  B <- 9999
+  draws  <- sapply(theta, function(m) rnorm(B, m, 0.03))
+  rstar  <- robustness(theta, draws)$results[[1]]$Rstar_95
+  p_hi   <- robustness(theta, draws, tau = rstar * 1.001)$results[[1]]$p_tau
+  p_lo   <- robustness(theta, draws, tau = rstar * 0.999)$results[[1]]$p_tau
+  expect_lte(p_hi, 0.05)   # tau just above the bound: equivalence test rejects
+  expect_gt(p_lo,  0.05)   # tau just below the bound: it does not
+})
+
+test_that("p_tau floors at 1/(B+1) and defaults to NA", {
+  set.seed(2)
+  theta <- c(0.20, 0.25, 0.18)
+  B <- 9999
+  draws <- sapply(theta, function(m) rnorm(B, m, 0.02))
+  expect_equal(robustness(theta, draws, tau = 100)$results[[1]]$p_tau, 1 / (B + 1))
+  none <- robustness(theta, draws)$results[[1]]
+  expect_true(is.na(none$p_tau))
+  expect_true(is.na(none$tau))
+})
+
+test_that("tau input is validated", {
+  set.seed(3)
+  theta <- c(0.20, 0.25, 0.18)
+  draws <- sapply(theta, function(m) rnorm(999, m, 0.02))
+  expect_error(robustness(theta, draws, tau = 0),            "positive")
+  expect_error(robustness(theta, draws, tau = -1),           "positive")
+  expect_error(robustness(theta, draws, tau = c(0.01, 0.02)),"single")
+})
