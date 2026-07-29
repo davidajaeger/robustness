@@ -21,9 +21,12 @@ print.range_test <- function(x, ...) {
     cat(sprintf("  Robustness ratio = %9.5f   (R*(.95) / |theta_bar|)\n",
                 x$ratio))
   }
-  if (!is.na(x$tau)) {
-    cat(sprintf("  Equivalence   tau = %9.5f   p_tau = %7.4f\n", x$tau, x$p_tau))
-    cat("                (reject H0: Delta >= tau at level alpha when p_tau <= alpha)\n")
+  if (!is.null(x$p_tau) && !is.na(x$p_tau)) {
+    # Equivalence at the pre-specified tolerance tau. By the duality of
+    # Jaeger (2026), H0: Delta >= tau rejects at level alpha exactly when
+    # R*(1-alpha) <= tau.
+    cat(sprintf("  Equivalence   tau = %9.5f   p_tau = %7.4f\n",
+                x$tau, x$p_tau))
   }
   if (isFALSE(x$wald_ok)) {
     cat("  Wald undefined: contrast covariance rank deficient.\n")
@@ -60,9 +63,6 @@ print.robustness <- function(x, ...) {
   cat(sprintf("  B = %d (supplied)   comparisons = %d   alpha = %s\n",
               x$B, length(x$results),
               paste(formatC(x$alpha, format = "g"), collapse = ", ")))
-  tau_val <- if (length(x$results)) x$results[[1]]$tau else NA_real_
-  if (!is.na(tau_val))
-    cat(sprintf("  equivalence tolerance tau = %s\n", formatC(tau_val, format = "g")))
   cat(strrep("=", 70), "\n", sep = "")
 
   # Panel A: specification-level estimates, only when available.
@@ -85,6 +85,21 @@ print.robustness <- function(x, ...) {
   .print_panel_b_rows(x$results)
   cat("  Note: the robustness ratio is R*(.95) / |theta_bar|. When |theta_bar|\n")
   cat("        is close to zero, interpret it with caution.\n")
+
+  # Equivalence at a pre-specified tolerance tau, printed only when tau was
+  # supplied. Mirrors the Stata command's block below Panel B: R*(.95), the
+  # equivalence p-value p_tau, and whether H0: Delta >= tau rejects at the
+  # .05 level (equivalently, by the duality lemma, R*(.95) <= tau).
+  tau_val <- x$results[[1]]$tau
+  if (!is.null(tau_val) && !is.na(tau_val)) {
+    cat("\n")
+    cat(strrep("-", 70), "\n", sep = "")
+    cat(sprintf("  Equivalence at pre-specified tolerance  tau = %.5f\n", tau_val))
+    cat(strrep("-", 70), "\n", sep = "")
+    .print_tau_rows(x$results, tau_val)
+    cat("  A comparison is equivalent at tau (rejects H0: Delta >= tau at the\n")
+    cat("  .05 level) exactly when R*(.95) <= tau, equivalently p_tau <= .05.\n")
+  }
 
   # Per-comparison detail (Wald, equivalence bounds, full breakdown).
   cat("\n")
@@ -131,7 +146,6 @@ print.robustness <- function(x, ...) {
 .print_panel_b_rows <- function(results) {
   cnames <- vapply(results, function(r) r$label %||% "comparison", character(1))
   cn_w <- max(nchar(cnames), nchar("Comparison set")) + 2L
-  has_tau <- any(vapply(results, function(r) !is.na(r$tau), logical(1)))
   hdr <- paste0(
     "  ", formatC("Comparison set", width = -cn_w),
     formatC("K",          width = 3),
@@ -142,7 +156,6 @@ print.robustness <- function(x, ...) {
     " ", formatC("p_R",        width = 8),
     " ", formatC("Rob. ratio", width = 10)
   )
-  if (has_tau) hdr <- paste0(hdr, " ", formatC("p_tau", width = 8))
   cat(hdr, "\n", sep = "")
   for (r in results) {
     # R*(.95): always reported as the bootstrap .95 quantile of the uncentred
@@ -166,10 +179,30 @@ print.robustness <- function(x, ...) {
       " ", formatC(rstar_95,    width = 10, digits = 5, format = "f"),
       " ", formatC(r$p_R,       width = 8,  digits = 4, format = "f"),
       " ", ratio_s,
-      if (has_tau) {
-        if (is.na(r$p_tau)) paste0(" ", formatC(".", width = 8))
-        else paste0(" ", formatC(r$p_tau, width = 8, digits = 4, format = "f"))
-      } else "",
+      "\n", sep = ""
+    )
+  }
+}
+
+# Internal: print the equivalence-at-tolerance rows. One row per comparison
+# with R*(.95), p_tau, and the reject/accept decision at the .05 level.
+.print_tau_rows <- function(results, tau_val) {
+  cnames <- vapply(results, function(r) r$label %||% "comparison", character(1))
+  cn_w <- max(nchar(cnames), nchar("Comparison set")) + 2L
+  hdr <- paste0(
+    "  ", formatC("Comparison set", width = -cn_w),
+    formatC("R*(.95)", width = 10),
+    " ", formatC("p_tau", width = 8),
+    " ", formatC("equiv. at tau", width = 14)
+  )
+  cat(hdr, "\n", sep = "")
+  for (r in results) {
+    equiv <- if (isTRUE(r$Rstar_95 <= tau_val)) "yes" else "no"
+    cat(
+      "  ", formatC(r$label %||% "comparison", width = -cn_w),
+      formatC(r$Rstar_95, width = 10, digits = 5, format = "f"),
+      " ", formatC(r$p_tau, width = 8, digits = 4, format = "f"),
+      " ", formatC(equiv, width = 14),
       "\n", sep = ""
     )
   }
@@ -179,8 +212,10 @@ print.robustness <- function(x, ...) {
 #'
 #' One row per comparison-by-alpha, with the range and Wald statistics,
 #' equality p-values, equivalence bounds, the comparison mean and robustness
-#' ratio, and the \code{wald_ok} flag (\code{FALSE} when the Wald is undefined
-#' through rank deficiency). Convenient for assembling tables.
+#' ratio, the \code{wald_ok} flag (\code{FALSE} when the Wald is undefined
+#' through rank deficiency), and (when \code{tau} was supplied to
+#' \code{robustness}) the tolerance \code{tau} and its equivalence p-value
+#' \code{p_tau}. Convenient for assembling tables.
 #'
 #' @param x A \code{"robustness"} object.
 #' @param row.names,optional Ignored, present for S3 consistency.
@@ -204,8 +239,8 @@ as.data.frame.robustness <- function(x, row.names = NULL, optional = FALSE,
       Rstar      = r$equivalence$Rstar,
       Wstar      = r$equivalence$Wstar,
       ratio      = r$ratio,
-      tau        = r$tau,
-      p_tau      = r$p_tau,
+      tau        = if (is.null(r$tau)) NA_real_ else r$tau,
+      p_tau      = if (is.null(r$p_tau)) NA_real_ else r$p_tau,
       stringsAsFactors = FALSE
     )
   })
