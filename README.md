@@ -10,7 +10,7 @@ Applied work routinely presents several specifications of the same coefficient a
 - **`R*(.50)`:** the median of the uncentred bootstrap range distribution.
 - **`p_R` (the range-based equality test):** the bootstrap p-value for the null that every specification shares a common probability limit.
 - the robustness ratio `R*(.95) / |theta_bar|`, where `theta_bar` is the mean estimate over the comparison's specs.
-- **`p_tau` (the equivalence test at a pre-specified tolerance), when `tau` is supplied:** the bootstrap p-value for the null that the disagreement across specifications is at least `tau` -- the largest disagreement you would still call robust. It is the add-one share of uncentred bootstrap ranges at or above `tau`, and by the duality in the paper `p_tau <= alpha` exactly when `R*(1-alpha) <= tau`.
+- **`p_tau` (the equivalence test at a pre-specified tolerance), when `tau` is given:** the bootstrap p-value for the null that the disagreement across specifications is at least `tau`, the largest disagreement you would still call robust. It is the add-one share of uncentred bootstrap ranges at or above `tau`, and by the duality in the paper `p_tau <= alpha` exactly when `R*(1-alpha) <= tau`.
 
 The Wald statistic (`W`), its p-value (`p_W`), and the Wald bound (`W*`) are also computed, with a `wald_ok` flag for collinearity-induced rank deficiency (the Wald is returned as `NA` with a warning; the range statistics are unaffected). With `keep_draws = TRUE` the per-replication bootstrap series are retained for plotting.
 
@@ -48,8 +48,8 @@ robustness(theta, draws)
 robustness(theta, draws,
            comparisons = list(all = 1:4, first_two = 1:2, extremes = c(1, 4)))
 
-# With a pre-specified equivalence tolerance: also report p_tau
-robustness(theta, draws, tau = 0.02)
+# Pre-specified equivalence tolerance: also report p_tau for each comparison
+robustness(theta, draws, tau = 0.05)
 ```
 
 ## Two workflows
@@ -91,7 +91,7 @@ print(result)
 
 ## Output
 
-`robustness()` returns an object of class `"robustness"` with `print`, `summary`, and `as.data.frame` methods. The `as.data.frame` method returns one row per comparison-by-alpha, with columns `comparison`, `K`, `B`, `theta_bar`, `R`, `W`, `p_R`, `p_W`, `wald_ok`, `alpha`, `Rstar`, `Wstar`, `ratio`, `tau`, `p_tau` (the last two `NA` unless `tau` was supplied). `panel_a()` returns the Panel A data frame when available, `NULL` otherwise.
+`robustness()` returns an object of class `"robustness"` with `print`, `summary`, and `as.data.frame` methods. The `as.data.frame` method returns one row per comparison-by-alpha, with columns `comparison`, `K`, `B`, `theta_bar`, `R`, `W`, `p_R`, `p_W`, `wald_ok`, `alpha`, `Rstar`, `Wstar`, `ratio`, and (when `tau` is supplied) `tau` and `p_tau`. `panel_a()` returns the Panel A data frame when available, `NULL` otherwise. When `tau` is supplied, the print method adds an equivalence-at-tolerance block below Panel B showing `R*(.95)`, `p_tau`, and the equivalence decision for each comparison.
 
 ## Plotting the bootstrap distribution
 
@@ -118,7 +118,7 @@ The uncentred series (`range_unc`, `wald_unc`) are the ones whose `(1 - alpha)` 
 
 ## Generating the draws
 
-The package takes the boostrapped estimates as input, it does not produce them. The vignette (`vignette("robustness")`) gives a worked generation example, and the [Stata replication package](https://github.com/davidajaeger/robustness-replications) for Jaeger (2026) contains the generation scripts used for each application in the paper. The single requirement is that every specification on a given replication is estimated on the **same** resampled units.
+The package consumes draws; it does not produce them. The vignette (`vignette("robustness")`) gives a worked generation example, and the [Stata replication package](https://github.com/davidajaeger/robustness-replications) for Jaeger (2026) contains the generation scripts used for each application in the paper. The single requirement is that every specification on a given replication is estimated on the **same** resampled units.
 
 ## Citing
 

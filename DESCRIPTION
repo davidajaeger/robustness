@@ -2,7 +2,7 @@ Package: robustness
 Type: Package
 Title: Range Tests for Equality and Equivalence Across Specifications
 Version: 0.3.0
-Date: 2026-07-20
+Date: 2026-07-28
 Authors@R: person("David A.", "Jaeger", role = c("aut", "cre"),
                   email = "daj4@st-andrews.ac.uk")
 Description: Range-based and Wald-based tests of equality and equivalence
