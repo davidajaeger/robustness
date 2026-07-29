@@ -25,8 +25,10 @@ a companion Wald statistic, using the bootstrap to obtain their distributions.
 This package computes those statistics. It takes the full-sample estimates and
 a matrix of bootstrap draws and returns, for each comparison, the range and
 Wald statistics, equivalence bounds $R^*_{1-\alpha}$ and $W^*_{1-\alpha}$, and
-equality-test p-values $p_R$ and $p_W$. It is the R counterpart of the Stata
-`robustness` command; given the same draws, the two produce the same numbers.
+equality-test p-values $p_R$ and $p_W$. Given a pre-specified tolerance through
+`tau`, it also returns the equivalence p-value $p_\tau$. It is the R counterpart
+of the Stata `robustness` command; given the same draws, the two produce the
+same numbers.
 
 The package computes statistics from draws. It does not generate the draws. The
 section below shows how.
@@ -54,6 +56,28 @@ res <- robustness(lee_example$theta, lee_example$draws,
                   comparisons = lee_example$comparisons)
 as.data.frame(res)
 ```
+
+## A pre-specified tolerance
+
+The bound $R^*_{.95}$ answers "how close are the specifications, in the units
+of the coefficient?" without committing in advance to how close is close
+enough. If you do have a tolerance in mind -- the largest disagreement $\tau$
+you would still call robust -- supply it with `tau`, and each comparison also
+reports $p_\tau$, the equivalence p-value for the null that the disagreement is
+at least $\tau$.
+
+```{r}
+robustness(lee_example$theta, lee_example$draws,
+           comparisons = lee_example$comparisons,
+           tau = 0.05)
+```
+
+$p_\tau$ is the add-one share of uncentred bootstrap ranges at or above $\tau$.
+The bound and the test are two readings of one object: by the duality in Jaeger
+(2026), $p_\tau \le \alpha$ exactly when $R^*_{1-\alpha} \le \tau$. So the
+equivalence-at-tolerance block below Panel B rejects $H_0\!: \Delta \ge \tau$ at
+the .05 level for precisely the comparisons whose $R^*_{.95}$ is at or below
+$\tau$.
 
 ## Generating the draws
 
